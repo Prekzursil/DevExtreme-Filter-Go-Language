@@ -1,0 +1,29 @@
+{
+    "entityName": "test1schema",
+    "fields": [
+        {
+            "name": "field_string",
+            "type": "string"
+        },
+        {
+            "name": "field_int",
+            "type": "int"
+        },
+        {
+            "name": "field_float",
+            "type": "float64"
+        },
+        {
+            "name": "field_bool",
+            "type": "bool"
+        },
+        {
+            "name": "field_time",
+            "type": "time.Time"
+        },
+        {
+            "name": "field_text",
+            "type": "string" 
+        }
+    ]
+}

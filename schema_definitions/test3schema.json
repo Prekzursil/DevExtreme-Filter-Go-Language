@@ -1,0 +1,16 @@
+{
+    "entityName": "test3schema",
+    "fields": [
+        { "name": "sku", "type": "string" },
+        { "name": "product_name", "type": "string" },
+        { "name": "short_description", "type": "string" },
+        { "name": "full_description", "type": "string" }, 
+        { "name": "cost_price", "type": "float64" },
+        { "name": "retail_price", "type": "float64" },
+        { "name": "stock_count", "type": "int" },
+        { "name": "is_active", "type": "bool" },
+        { "name": "published_at", "type": "time.Time" },
+        { "name": "last_ordered_at", "type": "time.Time" },
+        { "name": "tags", "type": "string" }
+    ]
+}

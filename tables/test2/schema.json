@@ -1,0 +1,13 @@
+{
+    "entityName": "test2",
+    "fields": [
+        {"name": "id", "type": "int"},
+        {"name": "item_name", "type": "string"},
+        {"name": "category", "type": "string"},
+        {"name": "supplier", "type": "string"},
+        {"name": "purchase_cost", "type": "float64"},
+        {"name": "stock_level", "type": "int"},
+        {"name": "is_perishable", "type": "bool"},
+        {"name": "expiry_date", "type": "time.Time"}
+    ]
+}

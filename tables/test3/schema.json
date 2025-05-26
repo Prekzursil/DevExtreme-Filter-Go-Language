@@ -1,0 +1,16 @@
+{
+    "entityName": "test3",
+    "fields": [
+        {"name": "uuid", "type": "string"},
+        {"name": "title", "type": "string"},
+        {"name": "content", "type": "string"}, 
+        {"name": "author_email", "type": "string"},
+        {"name": "status", "type": "string"}, 
+        {"name": "views", "type": "int"},
+        {"name": "rating_avg", "type": "float64"},
+        {"name": "is_featured", "type": "bool"},
+        {"name": "created_on", "type": "time.Time"},
+        {"name": "updated_on", "type": "time.Time"},
+        {"name": "meta_keywords", "type": "string"}
+    ]
+}

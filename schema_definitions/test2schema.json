@@ -1,0 +1,37 @@
+{
+    "entityName": "test2schema",
+    "fields": [
+        {
+            "name": "name",
+            "type": "string"
+        },
+        {
+            "name": "description",
+            "type": "string" 
+        },
+        {
+            "name": "quantity",
+            "type": "int"
+        },
+        {
+            "name": "price",
+            "type": "float64"
+        },
+        {
+            "name": "active",
+            "type": "bool"
+        },
+        {
+            "name": "created_at",
+            "type": "time.Time"
+        },
+        {
+            "name": "updated_at",
+            "type": "time.Time"
+        },
+        {
+            "name": "item_type",
+            "type": "string"
+        }
+    ]
+}

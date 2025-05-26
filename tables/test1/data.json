@@ -1,0 +1,42 @@
+[
+    {
+        "id": 1, 
+        "product_name": "Laptop Pro X1", 
+        "category": "Electronics", 
+        "unit_price": 1250.99, 
+        "in_stock": true, 
+        "last_updated": "2023-01-15T10:30:00Z"
+    },
+    {
+        "id": 2, 
+        "product_name": "Ergonomic Office Chair", 
+        "category": "Furniture", 
+        "unit_price": 375.50, 
+        "in_stock": false, 
+        "last_updated": "2023-02-20T14:35:00Z"
+    },
+    {
+        "id": 3, 
+        "product_name": "Advanced Wireless Mouse", 
+        "category": "Electronics", 
+        "unit_price": 49.99, 
+        "in_stock": true, 
+        "last_updated": "2023-03-10T08:45:15Z"
+    },
+    {
+        "id": 4,
+        "product_name": "Mechanical Keyboard",
+        "category": "Electronics",
+        "unit_price": 120.00,
+        "in_stock": true,
+        "last_updated": "2023-04-01T11:00:00Z"
+    },
+    {
+        "id": 5,
+        "product_name": "Standing Desk Converter",
+        "category": "Furniture",
+        "unit_price": 299.00,
+        "in_stock": true,
+        "last_updated": "2023-04-05T16:20:00Z"
+    }
+]

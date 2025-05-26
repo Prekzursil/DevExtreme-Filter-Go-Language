@@ -1,0 +1,29 @@
+{
+    "entityName": "transaction",
+    "fields": [
+        {
+            "name": "date",
+            "type": "time.Time"
+        },
+        {
+            "name": "amount",
+            "type": "float64"
+        },
+        {
+            "name": "name",
+            "type": "string"
+        },
+        {
+            "name": "location",
+            "type": "string"
+        },
+        {
+            "name": "category",
+            "type": "string"
+        },
+        {
+            "name": "type",
+            "type": "string"
+        }
+    ]
+}

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entgo Schema Editor</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="text"], select, textarea {
+            width: calc(100% - 22px);
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff; color: white; padding: 10px 15px;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover { background-color: #0056b3; }
+        textarea { min-height: 200px; white-space: pre; overflow-wrap: normal; overflow-x: scroll; }
+        .field-group { border: 1px solid #eee; padding: 15px; margin-top: 15px; border-radius: 4px; }
+        h1, h2 { color: #007bff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Entgo Schema Generator</h1>
+
+        <div class="saved-schemas">
+            <h2>Load Saved Schema</h2>
+            <label for="savedSchemasList">Select a schema to load:</label>
+            <select id="savedSchemasList" onchange="loadSelectedSchema()">
+                <option value="">-- Select --</option>
+            </select>
+        </div>
+
+        <h2>Entity Definition</h2>
+        <label for="entityName">Entity Name (e.g., User, Product):</label>
+        <input type="text" id="entityName" name="entityName" value="MyEntity">
+
+        <div class="field-group">
+            <h3>Field 1</h3>
+            <label for="fieldName1">Field Name (e.g., username, price):</label>
+            <input type="text" id="fieldName1" name="fieldName1" value="ExampleField">
+
+            <label for="fieldType1">Field Type:</label>
+            <select id="fieldType1" name="fieldType1">
+                <option value="string" selected>string</option>
+                <option value="int">int</option>
+                <option value="bool">bool</option>
+                <option value="time.Time">time.Time</option>
+                <option value="float64">float64</option>
+            </select>
+            <!-- No remove button for the first field -->
+        </div>
+
+        <div id="additionalFieldsContainer"></div>
+        <button type="button" onclick="addField()" style="background-color: #28a745; margin-top: 10px;">+ Add Field</button>
+
+        <button onclick="generateSchema()">Generate Schema & Adapter Code</button>
+
+        <h2>Generated Schema Go Code</h2>
+        <textarea id="outputSchemaCode" readonly></textarea>
+
+        <h2>Generated Adapter Go Code (Template)</h2>
+        <textarea id="outputAdapterCode" readonly></textarea>
+    </div>
+
+    <script>
+        let fieldCounter = 1;
+
+        window.onload = async () => {
+            try {
+                const response = await fetch('/list-schema-definitions');
+                if (!response.ok) {
+                    console.error("Failed to list schemas:", response.statusText);
+                    return;
+                }
+                const schemaNames = await response.json();
+                const selectElement = document.getElementById('savedSchemasList');
+                schemaNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    selectElement.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error fetching schema list:", error);
+            }
+        };
+
+        async function loadSelectedSchema() {
+            const selectElement = document.getElementById('savedSchemasList');
+            const schemaName = selectElement.value;
+            if (!schemaName) return;
+
+            try {
+                const response = await fetch(`/load-schema-definition?name=${encodeURIComponent(schemaName)}`);
+                if (!response.ok) {
+                    alert(`Error loading schema ${schemaName}: ${response.statusText}`);
+                    return;
+                }
+                const schemaDefinition = await response.json();
+                populateForm(schemaDefinition);
+            } catch (error) {
+                alert(`Error fetching schema ${schemaName}: ${error}`);
+            }
+        }
+
+        function populateForm(schemaDefinition) {
+            document.getElementById('entityName').value = schemaDefinition.entityName || 'MyEntity';
+            
+            // Clear existing dynamic fields
+            document.getElementById('additionalFieldsContainer').innerHTML = '';
+            fieldCounter = 0; // Reset counter, first field is static
+
+            if (schemaDefinition.fields && schemaDefinition.fields.length > 0) {
+                // Populate the first (static) field
+                const firstField = schemaDefinition.fields[0];
+                document.getElementById('fieldName1').value = firstField.name || 'ExampleField';
+                document.getElementById('fieldType1').value = firstField.type || 'string';
+                fieldCounter = 1;
+
+                // Add and populate additional fields
+                for (let i = 1; i < schemaDefinition.fields.length; i++) {
+                    addField(); // This increments fieldCounter and creates new field elements
+                    const currentField = schemaDefinition.fields[i];
+                    document.getElementById(`fieldName${fieldCounter}`).value = currentField.name || '';
+                    document.getElementById(`fieldType${fieldCounter}`).value = currentField.type || 'string';
+                }
+            } else {
+                // Default for empty fields array
+                document.getElementById('fieldName1').value = 'ExampleField';
+                document.getElementById('fieldType1').value = 'string';
+                fieldCounter = 1;
+            }
+            // Clear generated code textareas
+            document.getElementById('outputSchemaCode').value = ''; 
+            document.getElementById('outputAdapterCode').value = '';
+        }
+
+
+        function addField() {
+            fieldCounter++;
+            const container = document.getElementById('additionalFieldsContainer');
+            const newFieldGroup = document.createElement('div');
+            newFieldGroup.classList.add('field-group');
+            newFieldGroup.id = `fieldGroup${fieldCounter}`;
+            newFieldGroup.innerHTML = `
+                <h3>Field ${fieldCounter} <button type="button" onclick="removeField(${fieldCounter})" style="background-color: #dc3545; font-size: 12px; padding: 5px 8px;">Remove</button></h3>
+                <label for="fieldName${fieldCounter}">Field Name:</label>
+                <input type="text" id="fieldName${fieldCounter}" name="fieldName${fieldCounter}">
+                <label for="fieldType${fieldCounter}">Field Type:</label>
+                <select id="fieldType${fieldCounter}" name="fieldType${fieldCounter}">
+                    <option value="string" selected>string</option>
+                    <option value="int">int</option>
+                    <option value="bool">bool</option>
+                    <option value="time.Time">time.Time</option>
+                    <option value="float64">float64</option>
+                </select>
+            `;
+            container.appendChild(newFieldGroup);
+        }
+
+        function removeField(id) {
+            const fieldGroupToRemove = document.getElementById(`fieldGroup${id}`);
+            if (fieldGroupToRemove) {
+                fieldGroupToRemove.remove();
+            }
+            // Note: Renumbering field IDs or names if fields are removed from the middle
+            // is complex and not implemented here for simplicity. The backend will receive
+            // fields based on their current DOM order.
+        }
+
+        async function generateSchema() {
+            const entityName = document.getElementById('entityName').value;
+            const fields = [];
+
+            // Collect all fields
+            for (let i = 1; i <= fieldCounter; i++) {
+                const fieldNameInput = document.getElementById(`fieldName${i}`);
+                if (!fieldNameInput) continue; // Skip if field was removed
+
+                const fieldName = fieldNameInput.value;
+                const fieldType = document.getElementById(`fieldType${i}`).value;
+                if (fieldName.trim() !== "") { // Only add fields with a name
+                    fields.push({ name: fieldName, type: fieldType });
+                }
+            }
+
+            if (entityName.trim() === "") {
+                alert("Entity Name cannot be empty.");
+                return;
+            }
+            if (fields.length === 0) {
+                alert("At least one field with a name is required.");
+                return;
+            }
+
+            const schemaDefinition = {
+                entityName: entityName,
+                fields: fields
+            };
+
+            try {
+                const response = await fetch('/generate-schema-code', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(schemaDefinition),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    document.getElementById('outputSchemaCode').value = `Error: ${response.status} ${response.statusText}\n${errorText}`;
+                    document.getElementById('outputAdapterCode').value = `Error: ${response.status} ${response.statusText}\n${errorText}`;
+                    return;
+                }
+
+                // Step 3: Expect JSON with schemaCode and adapterCode
+                const result = await response.json();
+                document.getElementById('outputSchemaCode').value = result.schemaCode || "";
+                document.getElementById('outputAdapterCode').value = result.adapterCode || "";
+
+            } catch (error) {
+                document.getElementById('outputSchemaCode').value = `Network or other error: ${error}`;
+                document.getElementById('outputAdapterCode').value = `Network or other error: ${error}`;
+            }
+        }
+    </script>
+</body>
+</html>

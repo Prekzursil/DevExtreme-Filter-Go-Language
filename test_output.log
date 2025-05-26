@@ -1,0 +1,221 @@
+2025/05/22 12:16:02 TestMain: START
+2025/05/22 12:16:02 TestMain: Generating test transactions...
+2025/05/22 12:16:02 Generated 50 test transactions
+2025/05/22 12:16:02 TestMain: Test transactions generated.
+2025/05/22 12:16:02 TestMain: Calling m.Run()...
+=== RUN   TestFilterTransactions
+=== RUN   TestFilterTransactions/No_filter_(nil_input)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'No filter (nil input)'
+2025/05/22 12:16:02 filterTransactions: no filter applied, returning 50 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'No filter (nil input)'
+=== RUN   TestFilterTransactions/Empty_filter_array
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Empty filter array'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 50 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Empty filter array'
+=== RUN   TestFilterTransactions/Amount_equals_100
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount equals 100'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 5 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount equals 100'
+=== RUN   TestFilterTransactions/Amount_greater_than_500
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount greater than 500'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 25 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount greater than 500'
+=== RUN   TestFilterTransactions/Amount_between_200_and_400_inclusive
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount between 200 and 400 inclusive'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 15 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount between 200 and 400 inclusive'
+=== RUN   TestFilterTransactions/Amount_not_equal_to_100
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount not equal to 100'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 45 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount not equal to 100'
+=== RUN   TestFilterTransactions/Name_equals_'Test_Trans_0'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Name equals 'Test Trans 0''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 1 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Name equals 'Test Trans 0''
+=== RUN   TestFilterTransactions/Name_contains_'Trans_1'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Name contains 'Trans 1''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 11 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Name contains 'Trans 1''
+=== RUN   TestFilterTransactions/Name_starts_with_'Test_Trans_2'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Name starts with 'Test Trans 2''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 11 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Name starts with 'Test Trans 2''
+=== RUN   TestFilterTransactions/Name_ends_with_'s_5'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Name ends with 's 5''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 1 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Name ends with 's 5''
+=== RUN   TestFilterTransactions/Name_not_contains_'foo_bar_baz'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Name not contains 'foo_bar_baz''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 50 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Name not contains 'foo_bar_baz''
+=== RUN   TestFilterTransactions/Date_equals_2024-01-01_(specific_time)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date equals 2024-01-01 (specific time)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 1 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date equals 2024-01-01 (specific time)'
+=== RUN   TestFilterTransactions/Date_equals_2024-01-02_(whole_day)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date equals 2024-01-02 (whole day)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 1 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date equals 2024-01-02 (whole day)'
+=== RUN   TestFilterTransactions/Date_greater_than_2024-01-03T12:00:00.000Z
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date greater than 2024-01-03T12:00:00.000Z'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 47 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date greater than 2024-01-03T12:00:00.000Z'
+=== RUN   TestFilterTransactions/Date_between_2024-01-02_(inclusive)_and_2024-01-04_(inclusive)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date between 2024-01-02 (inclusive) and 2024-01-04 (inclusive)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 3 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date between 2024-01-02 (inclusive) and 2024-01-04 (inclusive)'
+=== RUN   TestFilterTransactions/Location_equals_'Testville'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Location equals 'Testville''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 10 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Location equals 'Testville''
+=== RUN   TestFilterTransactions/Category_equals_'Sample_Cat_B'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Category equals 'Sample Cat B''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 10 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Category equals 'Sample Cat B''
+=== RUN   TestFilterTransactions/Amount_>_500_AND_Location_is_'Testville'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount > 500 AND Location is 'Testville''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 5 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount > 500 AND Location is 'Testville''
+=== RUN   TestFilterTransactions/Amount_<_200_OR_Category_is_'Demo_Cat_C'
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount < 200 OR Category is 'Demo Cat C''
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 15 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount < 200 OR Category is 'Demo Cat C''
+=== RUN   TestFilterTransactions/Complex:_(Name_contains_'Trans_0'_OR_Name_contains_'Trans_1')_AND_Amount_=_100
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Complex: (Name contains 'Trans 0' OR Name contains 'Trans 1') AND Amount = 100'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 2 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Complex: (Name contains 'Trans 0' OR Name contains 'Trans 1') AND Amount = 100'
+=== RUN   TestFilterTransactions/NOT_(Amount_=_100)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'NOT (Amount = 100)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 45 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'NOT (Amount = 100)'
+=== RUN   TestFilterTransactions/NOT_(Amount_=_100_AND_Location_=_'Testville')
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'NOT (Amount = 100 AND Location = 'Testville')'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 45 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'NOT (Amount = 100 AND Location = 'Testville')'
+=== RUN   TestFilterTransactions/Group1_AND_Group2:_(Loc=Testville_AND_Cat=Test_Cat_A)_AND_(Amount_>_100_AND_Type=Test_Debit)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Group1 AND Group2: (Loc=Testville AND Cat=Test Cat A) AND (Amount > 100 AND Type=Test Debit)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 0 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Group1 AND Group2: (Loc=Testville AND Cat=Test Cat A) AND (Amount > 100 AND Type=Test Debit)'
+=== RUN   TestFilterTransactions/Filter_resulting_in_zero_matches
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Filter resulting in zero matches'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 0 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Filter resulting in zero matches'
+=== RUN   TestFilterTransactions/Filter_on_non-existent_field
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Filter on non-existent field'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: unsupported field for Transaction: nonexistentfield
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Filter on non-existent field'
+=== RUN   TestFilterTransactions/Filter_with_unsupported_operator_for_field
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Filter with unsupported operator for field'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: amount value error: expected numeric type, got string for value value. Value: value
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Filter with unsupported operator for field'
+=== RUN   TestFilterTransactions/Malformed_filter_-_dangling_operator
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Malformed filter - dangling operator'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: malformed group filter: missing condition after operator 'and'. Filter: [[amount = 100] and]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Malformed filter - dangling operator'
+=== RUN   TestFilterTransactions/Malformed_filter_-_operator_not_a_string
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Malformed filter - operator not a string'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: logical operator in group must be a string, got int: '123'. Filter: [[amount = 100] 123 [name = Test Trans 0]]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Malformed filter - operator not a string'
+=== RUN   TestFilterTransactions/Malformed_filter_-_invalid_logical_operator
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Malformed filter - invalid logical operator'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: invalid logical operator in group: 'xor'. Filter: [[amount = 100] xor [name = Test Trans 0]]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Malformed filter - invalid logical operator'
+=== RUN   TestFilterTransactions/Malformed_NOT_filter_-_too_few_elements
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Malformed NOT filter - too few elements'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: malformed NOT filter: expected 2 elements, got 1. Filter: [!]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Malformed NOT filter - too few elements'
+=== RUN   TestFilterTransactions/Malformed_NOT_filter_-_too_many_elements
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Malformed NOT filter - too many elements'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: malformed NOT filter: expected 2 elements, got 3. Filter: [! [amount = 100] [name = Test Trans 0]]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Malformed NOT filter - too many elements'
+=== RUN   TestFilterTransactions/Date_'between'_with_invalid_value_type
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date 'between' with invalid value type'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: invalid 'between' value for date: expected array of 2, got string. Value: not-an-array
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date 'between' with invalid value type'
+=== RUN   TestFilterTransactions/Date_'between'_with_incorrect_array_length
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date 'between' with incorrect array length'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: invalid 'between' value for date: expected array of 2, got []interface {}. Value: [2024-01-01T00:00:00.000Z]
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date 'between' with incorrect array length'
+=== RUN   TestFilterTransactions/Date_'between'_with_non-string_dates_in_array
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date 'between' with non-string dates in array'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: invalid date strings in 'between' range. Start: '123', End: '456'
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date 'between' with non-string dates in array'
+=== RUN   TestFilterTransactions/Date_'between'_with_unparseable_date_string
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date 'between' with unparseable date string'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: error parsing date strings for 'between'. StartErr: parsing time "invalid-date" as "2006-01-02T15:04:05.000Z": cannot parse "invalid-date" as "2006", EndErr: <nil>
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date 'between' with unparseable date string'
+=== RUN   TestFilterTransactions/Date_field_with_non-string_value_(for_ops_other_than_between)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date field with non-string value (for ops other than between)'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: date value must be a string for operator '=', got int. Value: 12345
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date field with non-string value (for ops other than between)'
+=== RUN   TestFilterTransactions/Date_field_with_unparseable_date_string
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Date field with unparseable date string'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: error parsing date string 'not-a-date': parsing time "not-a-date" as "2006-01-02T15:04:05.000Z": cannot parse "not-a-date" as "2006" (also tried YYYY-MM-DD: parsing time "not-a-date" as "2006-01-02": cannot parse "not-a-date" as "2006")
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Date field with unparseable date string'
+=== RUN   TestFilterTransactions/Amount_'between'_with_invalid_value_type
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount 'between' with invalid value type'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: invalid 'between' value for amount: expected array of 2, got string. Value: not-an-array
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount 'between' with invalid value type'
+=== RUN   TestFilterTransactions/Amount_'between'_with_non-numeric_values_in_array
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount 'between' with non-numeric values in array'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: error converting amount range for 'between'. StartErr: expected numeric type, got string for value abc, EndErr: expected numeric type, got string for value def
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount 'between' with non-numeric values in array'
+=== RUN   TestFilterTransactions/Amount_field_with_non-numeric_value
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'Amount field with non-numeric value'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: amount value error: expected numeric type, got string for value not-a-number. Value: not-a-number
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'Amount field with non-numeric value'
+=== RUN   TestFilterTransactions/String_field_(e.g._name)_with_non-string_value
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'String field (e.g. name) with non-string value'
+2025/05/22 12:16:02 Error parsing DevExtreme filter: name value must be a string or nil, got int. Value: 123
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'String field (e.g. name) with non-string value'
+=== RUN   TestFilterTransactions/User_Image_Filter:_(Loc=LA_or_CHI)_AND_NOT_(Cat_CONTAINS_Groceries_AND_Cat_CONTAINS_Housing)
+    transaction_filter_test.go:479: TestFilterTransactions: STARTING test case 'User Image Filter: (Loc=LA or CHI) AND NOT (Cat CONTAINS Groceries AND Cat CONTAINS Housing)'
+2025/05/22 12:16:02 filterTransactions: applied filter, returning 0 transactions
+    transaction_filter_test.go:484: TestFilterTransactions: FINISHED filterTransactions for 'User Image Filter: (Loc=LA or CHI) AND NOT (Cat CONTAINS Groceries AND Cat CONTAINS Housing)'
+--- PASS: TestFilterTransactions (0.00s)
+    --- PASS: TestFilterTransactions/No_filter_(nil_input) (0.00s)
+    --- PASS: TestFilterTransactions/Empty_filter_array (0.00s)
+    --- PASS: TestFilterTransactions/Amount_equals_100 (0.00s)
+    --- PASS: TestFilterTransactions/Amount_greater_than_500 (0.00s)
+    --- PASS: TestFilterTransactions/Amount_between_200_and_400_inclusive (0.00s)
+    --- PASS: TestFilterTransactions/Amount_not_equal_to_100 (0.00s)
+    --- PASS: TestFilterTransactions/Name_equals_'Test_Trans_0' (0.00s)
+    --- PASS: TestFilterTransactions/Name_contains_'Trans_1' (0.00s)
+    --- PASS: TestFilterTransactions/Name_starts_with_'Test_Trans_2' (0.00s)
+    --- PASS: TestFilterTransactions/Name_ends_with_'s_5' (0.00s)
+    --- PASS: TestFilterTransactions/Name_not_contains_'foo_bar_baz' (0.00s)
+    --- PASS: TestFilterTransactions/Date_equals_2024-01-01_(specific_time) (0.00s)
+    --- PASS: TestFilterTransactions/Date_equals_2024-01-02_(whole_day) (0.00s)
+    --- PASS: TestFilterTransactions/Date_greater_than_2024-01-03T12:00:00.000Z (0.00s)
+    --- PASS: TestFilterTransactions/Date_between_2024-01-02_(inclusive)_and_2024-01-04_(inclusive) (0.00s)
+    --- PASS: TestFilterTransactions/Location_equals_'Testville' (0.00s)
+    --- PASS: TestFilterTransactions/Category_equals_'Sample_Cat_B' (0.00s)
+    --- PASS: TestFilterTransactions/Amount_>_500_AND_Location_is_'Testville' (0.00s)
+    --- PASS: TestFilterTransactions/Amount_<_200_OR_Category_is_'Demo_Cat_C' (0.00s)
+    --- PASS: TestFilterTransactions/Complex:_(Name_contains_'Trans_0'_OR_Name_contains_'Trans_1')_AND_Amount_=_100 (0.00s)
+    --- PASS: TestFilterTransactions/NOT_(Amount_=_100) (0.00s)
+    --- PASS: TestFilterTransactions/NOT_(Amount_=_100_AND_Location_=_'Testville') (0.00s)
+    --- PASS: TestFilterTransactions/Group1_AND_Group2:_(Loc=Testville_AND_Cat=Test_Cat_A)_AND_(Amount_>_100_AND_Type=Test_Debit) (0.00s)
+    --- PASS: TestFilterTransactions/Filter_resulting_in_zero_matches (0.00s)
+    --- PASS: TestFilterTransactions/Filter_on_non-existent_field (0.00s)
+    --- PASS: TestFilterTransactions/Filter_with_unsupported_operator_for_field (0.00s)
+    --- PASS: TestFilterTransactions/Malformed_filter_-_dangling_operator (0.00s)
+    --- PASS: TestFilterTransactions/Malformed_filter_-_operator_not_a_string (0.00s)
+    --- PASS: TestFilterTransactions/Malformed_filter_-_invalid_logical_operator (0.00s)
+    --- PASS: TestFilterTransactions/Malformed_NOT_filter_-_too_few_elements (0.00s)
+    --- PASS: TestFilterTransactions/Malformed_NOT_filter_-_too_many_elements (0.00s)
+    --- PASS: TestFilterTransactions/Date_'between'_with_invalid_value_type (0.00s)
+    --- PASS: TestFilterTransactions/Date_'between'_with_incorrect_array_length (0.00s)
+    --- PASS: TestFilterTransactions/Date_'between'_with_non-string_dates_in_array (0.00s)
+    --- PASS: TestFilterTransactions/Date_'between'_with_unparseable_date_string (0.00s)
+    --- PASS: TestFilterTransactions/Date_field_with_non-string_value_(for_ops_other_than_between) (0.00s)
+    --- PASS: TestFilterTransactions/Date_field_with_unparseable_date_string (0.00s)
+    --- PASS: TestFilterTransactions/Amount_'between'_with_invalid_value_type (0.00s)
+    --- PASS: TestFilterTransactions/Amount_'between'_with_non-numeric_values_in_array (0.00s)
+    --- PASS: TestFilterTransactions/Amount_field_with_non-numeric_value (0.00s)
+    --- PASS: TestFilterTransactions/String_field_(e.g._name)_with_non-string_value (0.00s)
+    --- PASS: TestFilterTransactions/User_Image_Filter:_(Loc=LA_or_CHI)_AND_NOT_(Cat_CONTAINS_Groceries_AND_Cat_CONTAINS_Housing) (0.00s)
+PASS
+2025/05/22 12:16:02 TestMain: m.Run() finished with code 0.
+2025/05/22 12:16:02 TestMain: Restored original client. Exiting.
+ok  	transaction-filter-backend	0.025s

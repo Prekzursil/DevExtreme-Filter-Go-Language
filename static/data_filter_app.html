@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Filter Application</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f9f9f9; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        label { display: block; margin-top: 10px; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"], input[type="datetime-local"], select {
+            padding: 8px; margin-right: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;
+        }
+        .filter-ui-row, .filter-group { display: flex; align-items: center; margin-bottom: 8px; padding: 5px; border: 1px solid #eee; border-radius: 4px; }
+        .filter-ui-row select, .filter-ui-row input { width: auto; flex-grow: 1; margin-left:5px; }
+        .filter-ui-row .field-select { min-width: 150px; }
+        .filter-ui-row .operator-select { min-width: 120px; }
+        .filter-ui-row .value-input { min-width: 150px; }
+        .filter-ui-row button, .filter-group button { padding: 5px 10px; font-size: 0.9em; margin-left: 5px; }
+        .add-condition-btn { background-color: #28a745; color:white; }
+        .remove-condition-btn { background-color: #dc3545; color:white; }
+        .apply-filter-btn { background-color: #007bff; color:white; font-size: 1.1em; padding: 10px 20px; margin-top:15px;}
+        
+        .logical-op-group { margin-left: 20px; padding-left: 10px; border-left: 2px solid #007bff; }
+        .group-operator-select { margin-bottom: 5px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f0f0f0; }
+        .table-wrapper { overflow-x: auto; } 
+        #guidelines { background-color: #eef; padding: 15px; border-radius: 4px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dynamic Data Filter</h1>
+
+        <div class="filter-section">
+            <h2>Build Your Filter</h2>
+            
+            <label for="entitySelect">Select Table/Entity:</label>
+            <select id="entitySelect" onchange="entityChanged()" style="width:auto; padding:8px; margin-bottom:15px;"></select>
+            <div id="availableFields" style="margin-top: 5px; font-size: 0.9em; color: #555; margin-bottom:15px;"></div>
+            
+            <div id="filterBuilderRoot">
+                {/* Filter UI will be built here by JavaScript */}
+            </div>
+            <button onclick="applyFilter()" class="apply-filter-btn">Apply Filter</button>
+        </div>
+
+        <div class="results-section">
+            <h2>Filtered Results</h2>
+            <div class="table-wrapper">
+                <table id="resultsTable">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p id="noResultsMessage" style="display:none;">No results found for the given filter.</p>
+        </div>
+        <div id="guidelines">
+            <h2>Guidelines & Documentation</h2>
+            <p>This GUI allows filtering data from `Ent` entities (like Transaction) or `Dynamic` file-based tables (like test1, test2, test3).</p>
+            <h3>How to Use:</h3>
+            <ol>
+                <li><strong>Select Table/Entity:</strong> Choose from the dropdown. "(Ent)" are database tables, "(Dynamic)" are loaded from JSON files.</li>
+                <li><strong>Combine conditions with:</strong> Choose AND (all conditions must be true) or OR (any condition can be true).</li>
+                <li><strong>Add Condition:</strong> Click to add up to 3 filter rows.</li>
+                <li>For each condition:
+                    <ul>
+                        <li><strong>Field Name:</strong> Select a field. The value input type will adjust.</li>
+                        <li><strong>Operator:</strong> Choose a comparison operator.</li>
+                        <li><strong>Value:</strong> Enter the value. Use the date/time picker for date fields. Select true/false for boolean fields.</li>
+                    </ul>
+                </li>
+                <li>Click <strong>"Apply Filter"</strong>.</li>
+            </ol>
+            <h3>Notes:</h3>
+            <ul>
+                <li>Date values from `datetime-local` inputs are sent as strings like `YYYY-MM-DDTHH:mm`. The backend expects ISO 8601 with Z or timezone offset for precise time filtering. For date-only matching, the backend might be tolerant.</li>
+                <li>The "Dynamic" tables (test1, test2, test3) use a simplified in-memory filter engine.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentEntityFields = [];
+        let filterGroupCounter = 0;
+
+        // --- Initialization and Entity Handling ---
+        window.onload = async () => {
+            try {
+                const [entRes, dynRes] = await Promise.all([
+                    fetch('/list-filterable-entities'),
+                    fetch('/dynamic-tables')
+                ]);
+
+                const entNames = entRes.ok ? await entRes.json() : [];
+                const dynNames = dynRes.ok ? await dynRes.json() : [];
+                
+                const selectElement = document.getElementById('entitySelect');
+                selectElement.innerHTML = '<option value="">-- Select Entity/Table --</option>'; 
+                
+                entNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name; 
+                    option.textContent = `${name} (Ent)`;
+                    option.dataset.type = "ent";
+                    selectElement.appendChild(option);
+                });
+                dynNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = `${name} (Dynamic)`;
+                    option.dataset.type = "dynamic";
+                    selectElement.appendChild(option);
+                });
+                
+                if (entNames.includes("transaction")) {
+                    selectElement.value = "transaction";
+                } else if (dynNames.length > 0) {
+                    selectElement.value = dynNames[0];
+                } else if (entNames.length > 0) {
+                    selectElement.value = entNames[0];
+                }
+                
+                if (selectElement.value) {
+                    await entityChanged(); // Wait for schema to load before initial filter
+                } else {
+                    initFilterBuilder(); // Initialize with an empty group if no default entity
+                }
+            } catch (error) {
+                console.error("Error fetching entity/table lists:", error);
+                alert("Error fetching entity/table lists.");
+                initFilterBuilder(); // Initialize with an empty group on error
+            }
+        };
+
+        async function entityChanged() { 
+            const selectElement = document.getElementById('entitySelect');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            
+            const availableFieldsDiv = document.getElementById('availableFields');
+            currentEntityFields = []; 
+            initFilterBuilder(); // Clear and set up new filter builder for the entity
+
+            if (!selectedOption || !selectedOption.value) { 
+                 availableFieldsDiv.innerHTML = 'Select an entity/table to see its fields.';
+                return;
+            }
+            const entityName = selectedOption.value;
+            const entityType = selectedOption.dataset.type;
+            availableFieldsDiv.innerHTML = 'Loading fields...';
+
+            let schemaUrl = "";
+            if (entityType === "ent") {
+                schemaUrl = `/load-schema-definition?name=${encodeURIComponent(entityName)}`;
+            } else if (entityType === "dynamic") {
+                schemaUrl = `/dynamic-tables/${encodeURIComponent(entityName)}/schema`;
+            } else {
+                 availableFieldsDiv.innerHTML = 'Unknown entity type selected.';
+                 return;
+            }
+
+            try {
+                const response = await fetch(schemaUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const schemaDefinition = await response.json();
+                
+                if (schemaDefinition.fields && schemaDefinition.fields.length > 0) {
+                    currentEntityFields = schemaDefinition.fields; 
+                    const fieldListText = currentEntityFields.map(f => `${f.name} (${f.type})`).join(', ');
+                    availableFieldsDiv.innerHTML = `Available fields for ${schemaDefinition.entityName || entityName}: ${fieldListText}`;
+                } else {
+                    availableFieldsDiv.innerHTML = `No fields defined for ${entityName}.`;
+                }
+                
+                // Re-initialize filter builder to populate field dropdowns in the first condition
+                initFilterBuilder(); 
+                await applyFilter(); // Load initial data for the selected entity
+            } catch (error) {
+                availableFieldsDiv.innerHTML = `Error fetching fields for ${entityName}: ${error.message}`;
+                currentEntityFields = [];
+                initFilterBuilder(); 
+                console.error(`Error fetching schema for ${entityName}:`, error);
+            }
+        }
+        
+        function initFilterBuilder() {
+            const rootContainer = document.getElementById('filterBuilderRoot');
+            rootContainer.innerHTML = ''; // Clear previous
+            filterGroupCounter = 0;
+            addGroup(rootContainer, true); // Add the initial, top-level group
+        }
+
+        function addGroup(parentContainer, isRoot = false) {
+            filterGroupCounter++;
+            const groupId = `group${filterGroupCounter}`;
+            const groupDiv = document.createElement('div');
+            groupDiv.id = groupId;
+            groupDiv.classList.add('filter-group');
+            if (!isRoot) {
+                groupDiv.classList.add('logical-op-group');
+            }
+
+            let groupOperatorHTML = '';
+            if (!isRoot) { // Connector for nested groups, not used in this simplified version yet
+                 // groupOperatorHTML = `<select class="group-connector-op"><option value="and">AND</option><option value="or">OR</option></select>`;
+            }
+            
+            groupDiv.innerHTML = `
+                ${groupOperatorHTML}
+                <div style="display:flex; align-items:center; margin-bottom:5px;">
+                    <select class="group-operator-select" id="groupOp${groupId}" style="width:auto; padding:5px;">
+                        <option value="and">AND (all in this group)</option>
+                        <option value="or">OR (any in this group)</option>
+                        <option value="notAnd">NOT AND (none in this group)</option>
+                        <option value="notOr">NOT OR (not any in this group)</option>
+                    </select>
+                    <button type="button" onclick="addConditionToGroup('${groupId}')" class="add-condition-btn" style="margin-left:10px;">+ Condition</button>
+                    ${!isRoot ? `<button type="button" onclick="removeGroup('${groupId}')" class="remove-condition-btn">Remove Group</button>` : ''}
+                </div>
+                <div class="conditions-container" id="conditionsFor${groupId}"></div>
+            `;
+            parentContainer.appendChild(groupDiv);
+            addConditionToGroup(groupId); // Add one condition by default to a new group
+        }
+
+        function removeGroup(groupId) {
+            document.getElementById(groupId)?.remove();
+        }
+
+        function addConditionToGroup(groupId) {
+            const conditionsContainer = document.getElementById(`conditionsFor${groupId}`);
+            const conditionIndex = conditionsContainer.children.length; // Simple index for unique IDs in this group
+            const conditionId = `${groupId}_cond${conditionIndex}`;
+
+            const conditionRow = document.createElement('div');
+            conditionRow.classList.add('filter-ui-row');
+            conditionRow.id = conditionId;
+
+            let fieldOptionsHTML = '<option value="">-- Field --</option>';
+            currentEntityFields.forEach(f => fieldOptionsHTML += `<option value="${f.name}">${f.name} (${f.type})</option>`);
+
+            conditionRow.innerHTML = `
+                <select class="field-select" id="field_${conditionId}" onchange="updateValueInput('${conditionId}')">${fieldOptionsHTML}</select>
+                <select class="operator-select" id="op_${conditionId}">
+                    <option value="=">=</option><option value="<>"><></option><option value=">">></option><option value="<"><</option>
+                    <option value=">=">>=</option><option value="<="><=</option><option value="contains">contains</option>
+                    <option value="startswith">starts with</option><option value="endswith">ends with</option><option value="notcontains">not contains</option>
+                </select>
+                <span id="valueCell_${conditionId}"><input class="value-input" type="text" id="val_${conditionId}" placeholder="value"></span>
+                <button type="button" onclick="removeConditionFromGroup('${conditionId}')" class="remove-condition-btn">X</button>
+            `;
+            conditionsContainer.appendChild(conditionRow);
+            updateValueInput(conditionId); // Set initial input type
+        }
+        
+        function removeConditionFromGroup(conditionId) {
+            document.getElementById(conditionId)?.remove();
+        }
+
+        function updateValueInput(conditionId) {
+            const fieldSelect = document.getElementById(`field_${conditionId}`);
+            const valueCell = document.getElementById(`valueCell_${conditionId}`);
+            const selectedOption = fieldSelect.options[fieldSelect.selectedIndex];
+            let fieldType = "";
+            if (selectedOption && selectedOption.value) {
+                const fieldSchema = currentEntityFields.find(f => f.name === selectedOption.value);
+                if (fieldSchema) fieldType = fieldSchema.type.toLowerCase();
+            }
+            
+            let inputHTML = '';
+            if (fieldType.includes("time")) inputHTML = `<input class="value-input" type="datetime-local" id="val_${conditionId}">`;
+            else if (fieldType === "bool") inputHTML = `<select class="value-input" id="val_${conditionId}"><option value="true">True</option><option value="false">False</option></select>`;
+            else if (fieldType === "int" || fieldType === "float64") inputHTML = `<input class="value-input" type="number" id="val_${conditionId}" step="${fieldType === 'float64' ? 'any' : '1'}" placeholder="number">`;
+            else inputHTML = `<input class="value-input" type="text" id="val_${conditionId}" placeholder="value">`;
+            valueCell.innerHTML = inputHTML;
+        }
+
+        async function buildFilterArray() {
+            // This function needs to traverse the UI groups and conditions
+            // and build the nested DevExtreme filter array.
+            // This is the most complex part to replicate DevExtreme's flexibility.
+            // For now, a simplified version that takes the first group:
+            const rootGroup = document.getElementById('filterBuilderRoot').querySelector('.filter-group');
+            if (!rootGroup) return null;
+
+            const groupId = rootGroup.id;
+            const groupOpSelect = document.getElementById(`groupOp${groupId}`);
+            const groupOperator = groupOpSelect ? groupOpSelect.value : "and"; // Default to AND
+            
+            const conditions = [];
+            const conditionNodes = document.getElementById(`conditionsFor${groupId}`).querySelectorAll('.filter-ui-row');
+            
+            conditionNodes.forEach(row => {
+                const field = row.querySelector('.field-select').value;
+                const op = row.querySelector('.operator-select').value;
+                const valInput = row.querySelector('.value-input'); // This ID is now generic
+                let val = valInput.value;
+
+                if (field && valInput) { // Ensure valInput exists
+                    if (valInput.type === 'select-one' && valInput.id.startsWith('val_')) { // Boolean select
+                        val = (val === 'true');
+                    } else if (valInput.type === 'number' && val !== '') {
+                        val = parseFloat(val);
+                    } else if (valInput.type === 'datetime-local' && val !== '') {
+                        try { val = new Date(val).toISOString(); } catch(e) { console.warn("Invalid date", e); /* keep as string */ }
+                    }
+                    if (val !== '' || valInput.type === 'select-one') { // Add condition if value is not empty or it's a boolean select
+                         conditions.push([field, op, val]);
+                    }
+                }
+            });
+
+            if (conditions.length === 0) return null;
+            if (conditions.length === 1) {
+                 // DevExtreme expects single condition as [field, op, value], not nested.
+                 // However, our backend parser was adapted for [[field,op,value]] from previous version.
+                 // Let's check what ParseFilterToPredicates and FilterDynamicData expect for single.
+                 // For now, returning as is, assuming backend handles it.
+                 // If backend expects [field,op,value], then this should be: return conditions[0];
+                 // If backend expects [[field,op,value]], then this is: return [conditions[0]];
+                 // The current backend filter parsers expect the array format, even for single.
+                 // So, if it's a single condition, it's just that condition.
+                 // If it's part of a group, it will be wrapped.
+                 // The DevExtreme format for a single condition is just `["field", "op", "value"]`
+                 // Let's return this for a single condition at the root.
+                 if (groupOperator === "and" || groupOperator === "or") return conditions[0]; 
+            }
+
+
+            let finalFilter = [];
+            conditions.forEach((cond, index) => {
+                finalFilter.push(cond);
+                if (index < conditions.length - 1) {
+                    finalFilter.push(groupOperator === "notAnd" || groupOperator === "notOr" ? 
+                                     (groupOperator === "notAnd" ? "and" : "or") : groupOperator);
+                }
+            });
+
+            if (groupOperator === "notAnd" || groupOperator === "notOr") {
+                return ["!", finalFilter];
+            }
+            return finalFilter.length > 0 ? finalFilter : null;
+        }
+
+        async function applyFilter() {
+            const selectElement = document.getElementById('entitySelect');
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const entityName = selectedOption.value;
+            const entityType = selectedOption.dataset.type;
+
+            if (!entityName) { 
+                // This case should ideally not be hit if applyFilter is only called after entity selection
+                // or if buildFilterArray returns null for no entity.
+                // However, if called directly (e.g. initial load with no default entity), clear table.
+                clearTable();
+                document.getElementById('availableFields').innerHTML = 'Please select an entity/table first.';
+                return; 
+            }
+
+            const finalFilterArray = await buildFilterArray();
+            console.log("Constructed Filter Array:", JSON.stringify(finalFilterArray, null, 2));
+            
+            const requestPayload = { filter: finalFilterArray }; 
+            if (entityType === "ent") {
+                requestPayload.entity = entityName; 
+            }
+            
+            const filterUrl = entityType === "dynamic" ? `/dynamic-tables/${encodeURIComponent(entityName)}/filter` : '/filter';
+
+            setLoadingState(true);
+            try { 
+                const response = await fetch(filterUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', },
+                    body: JSON.stringify(requestPayload),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    alert(`Error from server: ${response.status} ${response.statusText}\n${errorText}`);
+                    clearTable();
+                    document.getElementById('noResultsMessage').textContent = `Error: ${errorText}`;
+                    document.getElementById('noResultsMessage').style.display = 'block';
+                    return;
+                }
+                const results = await response.json();
+                displayResults(results);
+            } catch (error) {
+                alert(`Network or other error: ${error}`);
+                clearTable();
+                document.getElementById('noResultsMessage').textContent = `Network error: ${error}`;
+                document.getElementById('noResultsMessage').style.display = 'block';
+            } finally {
+                setLoadingState(false);
+            }
+        }
+
+        function setLoadingState(isLoading) {
+            // Basic loading state: disable apply button
+            // A more sophisticated UI would show a spinner
+            document.querySelector('.apply-filter-btn').disabled = isLoading;
+            if (isLoading) {
+                 document.getElementById('noResultsMessage').style.display = 'none'; // Hide old messages
+            }
+        }
+        
+        function clearTable() { 
+            const tableHead = document.getElementById('resultsTable').getElementsByTagName('thead')[0];
+            const tableBody = document.getElementById('resultsTable').getElementsByTagName('tbody')[0];
+            if(tableHead) tableHead.innerHTML = ""; 
+            if(tableBody) tableBody.innerHTML = ""; 
+            document.getElementById('noResultsMessage').style.display = 'none';
+        }
+
+        function displayResults(data) { 
+            clearTable(); 
+            const table = document.getElementById('resultsTable');
+            const tableHead = table.getElementsByTagName('thead')[0];
+            const tableBody = table.getElementsByTagName('tbody')[0];
+
+            if (!data || data.length === 0) {
+                document.getElementById('noResultsMessage').textContent = 'No results found for the given filter.';
+                document.getElementById('noResultsMessage').style.display = 'block';
+                return;
+            }
+            const headers = Object.keys(data[0]);
+            let headerRow = tableHead.insertRow(); 
+            headers.forEach(headerText => {
+                let th = document.createElement('th');
+                th.textContent = headerText;
+                headerRow.appendChild(th);
+            });
+            data.forEach(item => {
+                let row = tableBody.insertRow();
+                headers.forEach(header => {
+                    let cell = row.insertCell();
+                    let value = item[header];
+                    if (typeof value === 'string' && value.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
+                        try { value = new Date(value).toLocaleString(); } catch (e) { /* ignore */ }
+                    }
+                    cell.textContent = value === null || value === undefined ? "" : value;
+                });
+            });
+        }
+        // Other functions (clearTable, displayResults) remain similar but might need minor tweaks
+        // to ensure they work with the new structure if data format changes.
+        // For now, assume data format from backend is an array of flat objects.
+    </script>
+    </body>
+</html>

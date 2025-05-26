@@ -1,0 +1,13 @@
+{
+  "entityName": "MyEntity1",
+  "fields": [
+    {
+      "name": "test",
+      "type": "string"
+    },
+    {
+      "name": "test1",
+      "type": "int"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+    {
+        "id": 101, "item_name": "Organic Apples", "category": "Produce", "supplier": "FarmFresh Co.",
+        "purchase_cost": 0.50, "stock_level": 200, "is_perishable": true, "expiry_date": "2023-05-30T23:59:59Z"
+    },
+    {
+        "id": 102, "item_name": "Whole Wheat Bread", "category": "Bakery", "supplier": "Bakers Delight",
+        "purchase_cost": 2.20, "stock_level": 50, "is_perishable": true, "expiry_date": "2023-05-20T23:59:59Z"
+    },
+    {
+        "id": 103, "item_name": "Cheddar Cheese Block", "category": "Dairy", "supplier": "DairyLand",
+        "purchase_cost": 5.00, "stock_level": 75, "is_perishable": true, "expiry_date": "2023-07-15T23:59:59Z"
+    },
+    {
+        "id": 104, "item_name": "Canned Tuna", "category": "Pantry", "supplier": "Ocean Best",
+        "purchase_cost": 1.50, "stock_level": 300, "is_perishable": false, "expiry_date": "2025-12-31T23:59:59Z"
+    },
+    {
+        "id": 105, "item_name": "Premium Coffee Beans", "category": "Beverages", "supplier": "Roast Masters",
+        "purchase_cost": 12.00, "stock_level": 100, "is_perishable": false, "expiry_date": "2024-06-30T23:59:59Z"
+    }
+]

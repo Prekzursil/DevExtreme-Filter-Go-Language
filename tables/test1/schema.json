@@ -1,0 +1,11 @@
+{
+    "entityName": "test1",
+    "fields": [
+        {"name": "id", "type": "int"},
+        {"name": "product_name", "type": "string"},
+        {"name": "category", "type": "string"},
+        {"name": "unit_price", "type": "float64"},
+        {"name": "in_stock", "type": "bool"},
+        {"name": "last_updated", "type": "time.Time"}
+    ]
+}

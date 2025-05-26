@@ -1,0 +1,41 @@
+[
+    {
+        "uuid": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+        "title": "Introduction to Go Filtering",
+        "content": "This article discusses advanced filtering techniques in Go...",
+        "author_email": "author1@example.com",
+        "status": "published",
+        "views": 1500,
+        "rating_avg": 4.5,
+        "is_featured": true,
+        "created_on": "2023-01-01T10:00:00Z",
+        "updated_on": "2023-01-05T12:30:00Z",
+        "meta_keywords": "go,filtering,backend,tutorial"
+    },
+    {
+        "uuid": "b2c3d4e5-f6a7-8901-2345-67890abcdef0",
+        "title": "Understanding Ent Framework",
+        "content": "A deep dive into Ent, the entity framework for Go.",
+        "author_email": "author2@example.com",
+        "status": "draft",
+        "views": 250,
+        "rating_avg": 4.2,
+        "is_featured": false,
+        "created_on": "2023-02-10T11:00:00Z",
+        "updated_on": "2023-02-12T15:00:00Z",
+        "meta_keywords": "ent,golang,orm,database"
+    },
+    {
+        "uuid": "c3d4e5f6-a7b8-9012-3456-7890abcdef01",
+        "title": "Web Development with Go",
+        "content": "Building robust web applications using Go standard library and frameworks.",
+        "author_email": "author1@example.com",
+        "status": "published",
+        "views": 3200,
+        "rating_avg": 4.8,
+        "is_featured": true,
+        "created_on": "2023-03-15T09:00:00Z",
+        "updated_on": "2023-03-20T18:00:00Z",
+        "meta_keywords": "go,webdev,api,backend"
+    }
+]
