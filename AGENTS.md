@@ -27,4 +27,4 @@ bash scripts/verify
 - Queue workflow will post a task packet and notify `@copilot`.
 
 ## Queue Trigger Warning
-Applying label `agent:ready` triggers the queue workflow immediately.
+Applying label `agent:ready` triggers the queue workflow immediately. The workflow is idempotent: if an execution contract comment already exists on the issue, re-applying the label will not re-mutate labels or post a duplicate contract.
