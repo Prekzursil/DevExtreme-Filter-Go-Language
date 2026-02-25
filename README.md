@@ -94,6 +94,13 @@ This project provides a Go backend with a dynamic filtering API designed to work
 - React (frontend, static assets served by Go)
 - DevExtreme (for UI components in the React frontend)
 
+## Security
+
+Report vulnerabilities privately through GitHub Security Advisories:
+<https://github.com/Prekzursil/DevExtreme-Filter-Go-Language/security/advisories/new>
+
+See [SECURITY.md](SECURITY.md) for the full policy and response process.
+
 ## Contributing
 
 Feel free to fork the project and submit pull requests. For major changes, please open an issue first to discuss what you would like to change.
