@@ -2,39 +2,26 @@ name: Codecov Analytics
 
 permissions:
   contents: read
+  id-token: write
 
 on:
-  pull_request:
-    branches: [main, master]
   push:
+    branches: [main, master]
+  pull_request:
     branches: [main, master]
   workflow_dispatch:
 
 jobs:
-  codecov-analytics:
-    name: Codecov Analytics
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Generate Go coverage reports
-        run: |
-          mkdir -p coverage
-          go test ./... -coverprofile=coverage/go-coverage.out -covermode=count
-          go install github.com/t-yuki/gocover-cobertura@v0.0.0-20180217150009-aaee18c8195c
-          "$(go env GOPATH)/bin/gocover-cobertura" < coverage/go-coverage.out > coverage/go-coverage.xml
-
-      - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage/go-coverage.xml
-          flags: go
-          disable_search: true
-          fail_ci_if_error: true
-          verbose: true
+  shared-codecov-analytics:
+    permissions:
+      contents: read
+      id-token: write
+    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-codecov-analytics.yml@f22d03e44b104b4746fb4825b8a16637ee26bc69
+    with:
+      repo_slug: ${{ github.repository }}
+      event_name: ${{ github.event_name }}
+      sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      platform_repository: Prekzursil/quality-zero-platform
+      platform_ref: f22d03e44b104b4746fb4825b8a16637ee26bc69
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
