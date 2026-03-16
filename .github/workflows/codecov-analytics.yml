@@ -1,0 +1,41 @@
+name: Codecov Analytics
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  codecov-analytics:
+    name: Codecov Analytics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Generate Go coverage reports
+        run: |
+          mkdir -p coverage
+          go test ./... -coverprofile=coverage/go-coverage.out -covermode=count
+          go install github.com/t-yuki/gocover-cobertura@v0.0.0-20180217150009-aaee18c8195c
+          "$(go env GOPATH)/bin/gocover-cobertura" < coverage/go-coverage.out > coverage/go-coverage.xml
+
+      - uses: codecov/codecov-action@v5.5.2
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/go-coverage.xml
+          flags: go
+          disable_search: true
+          fail_ci_if_error: true
+          verbose: true
+
