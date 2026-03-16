@@ -30,7 +30,7 @@ jobs:
           go install github.com/t-yuki/gocover-cobertura@v0.0.0-20180217150009-aaee18c8195c
           "$(go env GOPATH)/bin/gocover-cobertura" < coverage/go-coverage.out > coverage/go-coverage.xml
 
-      - uses: codecov/codecov-action@v5.5.2
+      - uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage/go-coverage.xml
@@ -38,4 +38,3 @@ jobs:
           disable_search: true
           fail_ci_if_error: true
           verbose: true
-
