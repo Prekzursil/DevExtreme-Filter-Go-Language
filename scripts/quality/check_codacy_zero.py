@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -16,7 +17,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
@@ -101,9 +102,7 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    import os
-
+def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
     args = _parse_args()
     token = (args.token or os.environ.get("CODACY_API_TOKEN", "")).strip()
     api_base = normalize_https_url(CODACY_API_BASE, allowed_hosts={"api.codacy.com"}).rstrip("/")
@@ -143,7 +142,7 @@ def main() -> int:
                 findings.append(f"Codacy API request failed: HTTP {exc.code}")
                 status = "fail"
                 break
-            except Exception as exc:  # pragma: no cover - network/runtime surface
+            except (urllib.error.URLError, ValueError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
                 last_exc = exc
                 findings.append(f"Codacy API request failed: {exc}")
                 status = "fail"

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +16,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
 
@@ -79,8 +81,6 @@ def _render_md(payload: dict) -> str:
 
 
 def main() -> int:
-    import os
-
     args = _parse_args()
     token = (args.token or os.environ.get("DEEPSCAN_API_TOKEN", "")).strip()
     open_issues_url = os.environ.get("DEEPSCAN_OPEN_ISSUES_URL", "").strip()
@@ -111,7 +111,7 @@ def main() -> int:
             elif open_issues != 0:
                 findings.append(f"DeepScan reports {open_issues} open issues (expected 0).")
             status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
+        except (urllib.error.URLError, ValueError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
             findings.append(f"DeepScan API request failed: {exc}")
             status = "fail"
 

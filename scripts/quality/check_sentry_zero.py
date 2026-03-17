@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -15,7 +17,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 SENTRY_API_BASE = "https://sentry.io/api/0"
 
@@ -91,9 +93,7 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
-    import os
-
+def main() -> int:  # pylint: disable=too-many-locals,too-many-branches
     args = _parse_args()
     token = (args.token or os.environ.get("SENTRY_AUTH_TOKEN", "")).strip()
     org = (args.org or os.environ.get("SENTRY_ORG", "")).strip()
@@ -137,7 +137,7 @@ def main() -> int:
                 project_results.append({"project": project, "unresolved": unresolved})
 
             status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
+        except (urllib.error.URLError, ValueError, RuntimeError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
             findings.append(f"Sentry API request failed: {exc}")
             status = "fail"
 

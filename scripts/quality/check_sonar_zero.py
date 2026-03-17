@@ -4,7 +4,9 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -16,7 +18,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 SONAR_API_BASE = "https://sonarcloud.io"
 UNRESOLVED_HOTSPOT_STATUS = "TO_REVIEW"
@@ -96,9 +98,7 @@ def _search_total(api_base: str, endpoint: str, query: dict[str, str], auth_head
     return int(paging.get("total") or 0)
 
 
-def main() -> int:
-    import os
-
+def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
     args = _parse_args()
     token = (args.token or os.environ.get("SONAR_TOKEN", "")).strip()
     api_base = normalize_https_url(SONAR_API_BASE, allowed_hosts={"sonarcloud.io"}).rstrip("/")
@@ -160,7 +160,7 @@ def main() -> int:
                 findings.append(f"Sonar quality gate status is {quality_gate} (expected OK).")
 
             status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
+        except (urllib.error.URLError, ValueError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
             status = "fail"
             findings.append(f"Sonar API request failed: {exc}")
 

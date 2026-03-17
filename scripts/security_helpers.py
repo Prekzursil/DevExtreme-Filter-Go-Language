@@ -159,7 +159,7 @@ def _build_https_request(
     request_target: str,
     headers: Dict[str, str],
     data: Optional[bytes],
-) -> urllib.request.Request:
+) -> urllib.request.Request:  # pylint: disable=too-many-arguments
     return urllib.request.Request(
         url=f"https://{host}{request_target}",
         data=data,
@@ -177,6 +177,7 @@ def _open_https_request(
         return _read_https_success(response)
 
 
+# pylint: disable=too-many-arguments
 def _execute_https_request(
     *,
     host: str,
@@ -199,6 +200,7 @@ def _execute_https_request(
         return _read_https_error(exc)
 
 
+# pylint: disable=too-many-arguments,too-many-locals
 def request_https_json(
     raw_url: str,
     *,
@@ -209,7 +211,7 @@ def request_https_json(
     allowed_host_suffixes: Optional[Set[str]] = None,
     strip_query: bool = False,
     timeout: float = 30.0,
-) -> Tuple[object, Dict[str, str]]:
+) -> Tuple[object, Dict[str, str]]:  # pylint: disable=too-many-arguments,too-many-locals
     """Fetch JSON from a validated HTTPS endpoint only."""
 
     safe_url = normalize_https_url(

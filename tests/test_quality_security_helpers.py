@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# pylint: disable=protected-access,duplicate-code
+
 import importlib.util
 import sys
 from pathlib import Path
