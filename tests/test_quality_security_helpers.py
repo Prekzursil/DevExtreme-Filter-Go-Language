@@ -23,6 +23,11 @@ def _load_module(name: str, relative_path: str):
     return module
 
 
+def _expect_equal(actual: object, expected: object, message: str) -> None:
+    if actual != expected:
+        pytest.fail(f"{message}: expected {expected!r}, got {actual!r}")
+
+
 def test_request_https_json_validates_host_and_decodes_json(monkeypatch: pytest.MonkeyPatch) -> None:
     module = _load_module("security_helpers_under_test", "scripts/security_helpers.py")
 
@@ -40,10 +45,14 @@ def test_request_https_json_validates_host_and_decodes_json(monkeypatch: pytest.
         allowed_hosts={"api.github.com"},
     )
 
-    assert payload == {"ok": True}
-    assert headers == {"x-test": "1"}
-    assert observed["host"] == "api.github.com"
-    assert observed["request_target"] == "/repos/owner/repo"
+    _expect_equal(payload, {"ok": True}, "request_https_json should decode the JSON payload")
+    _expect_equal(headers, {"x-test": "1"}, "request_https_json should return response headers")
+    _expect_equal(observed["host"], "api.github.com", "request_https_json should validate the parsed host")
+    _expect_equal(
+        observed["request_target"],
+        "/repos/owner/repo",
+        "request_https_json should send the expected request target",
+    )
 
 
 def test_check_required_checks_api_get_uses_secure_helper(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -60,17 +69,25 @@ def test_check_required_checks_api_get_uses_secure_helper(monkeypatch: pytest.Mo
 
     payload = module._api_get("owner/repo", "commits/abc/status", "token")
 
-    assert payload == {"ok": True}
-    assert observed["url"] == "https://api.github.com/repos/owner/repo/commits/abc/status"
-    assert observed["allowed_hosts"] == {"api.github.com"}
-    assert observed["method"] == "GET"
+    _expect_equal(payload, {"ok": True}, "_api_get should return the helper payload")
+    _expect_equal(
+        observed["url"],
+        "https://api.github.com/repos/owner/repo/commits/abc/status",
+        "_api_get should call the GitHub API URL",
+    )
+    _expect_equal(observed["allowed_hosts"], {"api.github.com"}, "_api_get should allow only api.github.com")
+    _expect_equal(observed["method"], "GET", "_api_get should issue a GET request")
 
 
 def test_safe_output_path_in_workspace_rejects_escape(tmp_path: Path) -> None:
     module = _load_module("security_helpers_output_paths", "scripts/security_helpers.py")
 
     inside = module.safe_output_path_in_workspace("reports/out.json", "fallback.json", base=tmp_path)
-    assert inside == tmp_path / "reports" / "out.json"
+    _expect_equal(
+        inside,
+        tmp_path / "reports" / "out.json",
+        "safe_output_path_in_workspace should resolve the in-workspace output path",
+    )
 
     with pytest.raises(ValueError, match="escapes workspace root"):
         module.safe_output_path_in_workspace("../outside.json", "fallback.json", base=tmp_path)
@@ -83,7 +100,11 @@ def test_safe_input_file_path_in_workspace_requires_existing_workspace_file(tmp_
     coverage_file.parent.mkdir(parents=True)
     coverage_file.write_text("<coverage />", encoding="utf-8")
 
-    assert module.safe_input_file_path_in_workspace("coverage/go.xml", base=tmp_path) == coverage_file
+    _expect_equal(
+        module.safe_input_file_path_in_workspace("coverage/go.xml", base=tmp_path),
+        coverage_file,
+        "safe_input_file_path_in_workspace should return the in-workspace file",
+    )
 
     with pytest.raises(ValueError, match="escapes workspace root"):
         module.safe_input_file_path_in_workspace("../outside.xml", base=tmp_path)
@@ -101,8 +122,8 @@ def test_assert_coverage_named_path_stays_within_workspace(tmp_path: Path, monke
     coverage_file.write_text("<coverage />", encoding="utf-8")
 
     name, path = module.parse_named_path("go=artifacts/coverage.xml")
-    assert name == "go"
-    assert path == coverage_file
+    _expect_equal(name, "go", "parse_named_path should preserve the metric name")
+    _expect_equal(path, coverage_file, "parse_named_path should resolve the coverage file inside the workspace")
 
     with pytest.raises(ValueError, match="escapes workspace root"):
         module.parse_named_path("go=../coverage.xml")
