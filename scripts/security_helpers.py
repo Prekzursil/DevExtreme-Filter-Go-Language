@@ -7,6 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from email.message import Message
+from pathlib import Path
 from typing import Dict, Mapping, Optional, Set, Tuple
 from urllib.parse import urlparse, urlunparse
 
@@ -86,6 +87,34 @@ def normalize_https_url(
     if strip_query:
         sanitized = sanitized._replace(query="")
     return urlunparse(sanitized)
+
+
+def safe_output_path_in_workspace(raw: str, fallback: str, base: Path | None = None) -> Path:
+    root = (base or Path.cwd()).resolve()
+    candidate = Path((raw or "").strip() or fallback).expanduser()  # codeql[py/path-injection] constrained to workspace
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
+    return resolved
+
+
+def safe_input_file_path_in_workspace(raw: str, *, base: Path | None = None) -> Path:
+    root = (base or Path.cwd()).resolve()
+    candidate = Path((raw or "").strip()).expanduser()  # codeql[py/path-injection] constrained to workspace
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve(strict=False)
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Input file path escapes workspace root: {candidate}") from exc
+    if not resolved.exists() or not resolved.is_file():
+        raise ValueError(f"Input file does not exist: {resolved}")
+    return resolved
 
 
 def _build_request_target(path: str, query: Dict[str, str]) -> str:

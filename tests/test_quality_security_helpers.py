@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ def _load_module(name: str, relative_path: str):
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load module from {module_path}")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -60,3 +62,45 @@ def test_check_required_checks_api_get_uses_secure_helper(monkeypatch: pytest.Mo
     assert observed["url"] == "https://api.github.com/repos/owner/repo/commits/abc/status"
     assert observed["allowed_hosts"] == {"api.github.com"}
     assert observed["method"] == "GET"
+
+
+def test_safe_output_path_in_workspace_rejects_escape(tmp_path: Path) -> None:
+    module = _load_module("security_helpers_output_paths", "scripts/security_helpers.py")
+
+    inside = module.safe_output_path_in_workspace("reports/out.json", "fallback.json", base=tmp_path)
+    assert inside == tmp_path / "reports" / "out.json"
+
+    with pytest.raises(ValueError, match="escapes workspace root"):
+        module.safe_output_path_in_workspace("../outside.json", "fallback.json", base=tmp_path)
+
+
+def test_safe_input_file_path_in_workspace_requires_existing_workspace_file(tmp_path: Path) -> None:
+    module = _load_module("security_helpers_input_paths", "scripts/security_helpers.py")
+
+    coverage_file = tmp_path / "coverage" / "go.xml"
+    coverage_file.parent.mkdir(parents=True)
+    coverage_file.write_text("<coverage />", encoding="utf-8")
+
+    assert module.safe_input_file_path_in_workspace("coverage/go.xml", base=tmp_path) == coverage_file
+
+    with pytest.raises(ValueError, match="escapes workspace root"):
+        module.safe_input_file_path_in_workspace("../outside.xml", base=tmp_path)
+
+    with pytest.raises(ValueError, match="does not exist"):
+        module.safe_input_file_path_in_workspace("coverage/missing.xml", base=tmp_path)
+
+
+def test_assert_coverage_named_path_stays_within_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    module = _load_module("assert_coverage_100_under_test", "scripts/quality/assert_coverage_100.py")
+
+    coverage_file = tmp_path / "artifacts" / "coverage.xml"
+    coverage_file.parent.mkdir(parents=True)
+    coverage_file.write_text("<coverage />", encoding="utf-8")
+
+    name, path = module.parse_named_path("go=artifacts/coverage.xml")
+    assert name == "go"
+    assert path == coverage_file
+
+    with pytest.raises(ValueError, match="escapes workspace root"):
+        module.parse_named_path("go=../coverage.xml")

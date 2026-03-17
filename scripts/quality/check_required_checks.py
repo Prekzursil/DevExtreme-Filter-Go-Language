@@ -15,7 +15,7 @@ _HELPER_ROOT = _SCRIPT_DIR if os.path.exists(str(_SCRIPT_DIR / "security_helpers
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import request_https_json  # noqa: E402
+from security_helpers import request_https_json, safe_output_path_in_workspace  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -128,19 +128,6 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
-
-
 def main() -> int:
     args = _parse_args()
     token = (os.environ.get("GITHUB_TOKEN", "") or os.environ.get("GH_TOKEN", "")).strip()
@@ -184,8 +171,8 @@ def main() -> int:
         raise SystemExit("No payload collected")
 
     try:
-        out_json = _safe_output_path(args.out_json, "quality-zero-gate/required-checks.json")
-        out_md = _safe_output_path(args.out_md, "quality-zero-gate/required-checks.md")
+        out_json = safe_output_path_in_workspace(args.out_json, "quality-zero-gate/required-checks.json")
+        out_md = safe_output_path_in_workspace(args.out_md, "quality-zero-gate/required-checks.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
