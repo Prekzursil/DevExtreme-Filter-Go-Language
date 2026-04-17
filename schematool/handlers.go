@@ -168,13 +168,18 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filePath := filepath.Join(SchemaDefinitionsDir, name+".json")
-	fileData, err := os.ReadFile(filePath)
+	safeName, ok := safeEntityFilename(name)
+	if !ok {
+		http.Error(w, "Invalid 'name' query parameter", http.StatusBadRequest)
+		return
+	}
+	filePath := filepath.Join(SchemaDefinitionsDir, safeName)
+	fileData, err := fsReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			http.Error(w, fmt.Sprintf("Schema definition '%s' not found", name), http.StatusNotFound)
 		} else {
-			log.Printf("Error reading schema definition file %s: %v", filePath, err)
+			log.Print("Error reading schema definition file (path validated, details suppressed)")
 			http.Error(w, "Failed to read schema definition", http.StatusInternalServerError)
 		}
 		return
@@ -182,14 +187,13 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var schemaReq SchemaRequest
 	if err := json.Unmarshal(fileData, &schemaReq); err != nil {
-		log.Printf("Error unmarshalling schema definition file %s: %v", filePath, err)
+		log.Print("Error unmarshalling schema definition file (path validated, details suppressed)")
 		http.Error(w, "Invalid schema definition file format", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(fileData)
-	if err != nil {
-		log.Printf("Error writing schema definition response: %v", err)
+	if _, err := w.Write(fileData); err != nil {
+		log.Print("Error writing schema definition response (details suppressed)")
 	}
 }

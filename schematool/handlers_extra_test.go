@@ -242,6 +242,30 @@ func TestListSchemaDefinitionsHandler_EncodeFailure(t *testing.T) {
 	ListSchemaDefinitionsHandler(w, req)
 }
 
+func TestLoadSchemaDefinitionHandler_InvalidName(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=..%2Fetc", nil)
+	w := httptest.NewRecorder()
+	LoadSchemaDefinitionHandler(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestLoadSchemaDefinitionHandler_ReadFileError(t *testing.T) {
+	origRead := fsReadFile
+	defer func() { fsReadFile = origRead }()
+	fsReadFile = func(name string) ([]byte, error) {
+		return nil, errors.New("permission denied")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=widgets", nil)
+	w := httptest.NewRecorder()
+	LoadSchemaDefinitionHandler(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestGenerateSchemaCodeHandler_FullRoundTrip(t *testing.T) {
 	defer withTempSchemaDir(t)()
 
