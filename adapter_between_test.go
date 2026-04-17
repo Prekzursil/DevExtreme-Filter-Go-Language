@@ -2,6 +2,39 @@ package main
 
 import "testing"
 
+func TestScalarUnsupportedOps(t *testing.T) {
+	cleanup := writeTempSchema(t, "unsupopstest", []fieldSpec{
+		{Name: "name", Type: "string"},
+		{Name: "count", Type: "int"},
+		{Name: "rate", Type: "float64"},
+		{Name: "active", Type: "bool"},
+		{Name: "when", Type: "time.Time"},
+	})
+	defer cleanup()
+
+	ad, err := NewGenericEntAdapter("unsupopstest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Each scalar helper should reject unsupported operators with a specific error.
+	if _, err := ad.GetPredicateForField("name", "unsupportedop", "x"); err == nil {
+		t.Error("expected unsupported string op to error")
+	}
+	if _, err := ad.GetPredicateForField("count", "unsupportedop", 1); err == nil {
+		t.Error("expected unsupported int op to error")
+	}
+	if _, err := ad.GetPredicateForField("rate", "unsupportedop", 1.0); err == nil {
+		t.Error("expected unsupported float op to error")
+	}
+	if _, err := ad.GetPredicateForField("active", "unsupportedop", true); err == nil {
+		t.Error("expected unsupported bool op to error")
+	}
+	if _, err := ad.GetPredicateForField("when", "unsupportedop", "2024-01-01T00:00:00Z"); err == nil {
+		t.Error("expected unsupported time op to error")
+	}
+}
+
 func TestGetPredicateForField_Between(t *testing.T) {
 	cleanup := writeTempSchema(t, "betweentest", []fieldSpec{
 		{Name: "count", Type: "int"},
