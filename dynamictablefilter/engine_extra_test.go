@@ -72,3 +72,27 @@ func TestCombineBool_InvalidOp(t *testing.T) {
 		t.Error("expected error for unknown logical operator")
 	}
 }
+
+func TestApplyGroupFilter_FirstSubError(t *testing.T) {
+	// Group whose first element is a sub-filter that errors (unknown field).
+	filter := []interface{}{
+		[]interface{}{"unknown", "=", "x"},
+		"and",
+		[]interface{}{"name", "=", "y"},
+	}
+	if _, err := applyFilterRecursive(map[string]interface{}{"name": "y"}, simpleSchema(), filter); err == nil {
+		t.Error("expected error from group first-sub-filter error")
+	}
+}
+
+func TestApplyGroupFilter_StepSubError(t *testing.T) {
+	// First sub succeeds, second sub errors.
+	filter := []interface{}{
+		[]interface{}{"name", "=", "y"},
+		"and",
+		[]interface{}{"unknown", "=", "z"},
+	}
+	if _, err := applyFilterRecursive(map[string]interface{}{"name": "y"}, simpleSchema(), filter); err == nil {
+		t.Error("expected error from group step sub-filter error")
+	}
+}
