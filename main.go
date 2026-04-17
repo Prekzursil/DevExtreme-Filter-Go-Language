@@ -348,7 +348,6 @@ func prepareServer(ctx context.Context) (http.Handler, error) {
 	if err := client.Schema.Create(ctx); err != nil {
 		return nil, fmt.Errorf("failed creating schema resources: %w", err)
 	}
-	seedData(ctx)
 	return buildCORSHandler().Handler(setupMux()), nil
 }
 
@@ -360,10 +359,12 @@ func printStartupBanner() {
 
 func main() {
 	defer client.Close()
-	handler, err := prepareServer(context.Background())
+	ctx := context.Background()
+	handler, err := prepareServer(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
+	seedData(ctx)
 	printStartupBanner()
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
