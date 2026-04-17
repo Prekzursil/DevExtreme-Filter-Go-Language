@@ -370,9 +370,9 @@ func printStartupBanner() {
 }
 
 // startServer wires prepareServer + seedData + banner and returns the
-// handler ready to pass to http.ListenAndServe. Extracted from main()
-// so the plumbing is under test; only the actual ListenAndServe call
-// remains in main().
+// handler ready to pass to the listener. Extracted from main() so the
+// plumbing is under test; only the thin runMain body below remains in
+// main().
 func startServer() (http.Handler, error) {
 	ctx := context.Background()
 	handler, err := prepareServer(ctx)
@@ -384,11 +384,34 @@ func startServer() (http.Handler, error) {
 	return handler, nil
 }
 
-func main() {
-	defer client.Close()
+// listenAndServe is the http.ListenAndServe hook. Tests replace it with a
+// no-op function to exercise runMain without binding a real listener.
+var listenAndServe = http.ListenAndServe
+
+// runMain is the fully-testable entry point: it returns an exit code so
+// tests don't have to intercept os.Exit / log.Fatal. main() below calls
+// os.Exit with the returned code.
+func runMain() int {
+	defer closeClient()
 	handler, err := startServer()
 	if err != nil {
-		log.Fatal(err)
+		log.Print(err)
+		return 1
 	}
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	if err := listenAndServe(":8080", handler); err != nil {
+		log.Print(err)
+		return 1
+	}
+	return 0
+}
+
+func closeClient() {
+	if client == nil {
+		return
+	}
+	_ = client.Close()
+}
+
+func main() {
+	os.Exit(runMain())
 }

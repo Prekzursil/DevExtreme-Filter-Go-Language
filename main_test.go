@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -239,6 +240,52 @@ func TestStartServer_PrepareFails(t *testing.T) {
 
 	if _, err := startServer(); err == nil {
 		t.Error("expected startServer to propagate prepareServer error when client is nil")
+	}
+}
+
+func TestRunMain_Success(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	origCount := defaultSeedCount
+	defer func() { defaultSeedCount = origCount }()
+	defaultSeedCount = 0
+
+	origLAS := listenAndServe
+	defer func() { listenAndServe = origLAS }()
+	listenAndServe = func(addr string, h http.Handler) error { return nil }
+
+	if code := runMain(); code != 0 {
+		t.Errorf("runMain returned %d, want 0", code)
+	}
+}
+
+func TestRunMain_PrepareError(t *testing.T) {
+	orig := client
+	client = nil
+	defer func() { client = orig }()
+
+	if code := runMain(); code != 1 {
+		t.Errorf("runMain returned %d, want 1 when client is nil", code)
+	}
+}
+
+func TestRunMain_ListenerError(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	origCount := defaultSeedCount
+	defer func() { defaultSeedCount = origCount }()
+	defaultSeedCount = 0
+
+	origLAS := listenAndServe
+	defer func() { listenAndServe = origLAS }()
+	listenAndServe = func(addr string, h http.Handler) error {
+		return errors.New("listener refused")
+	}
+
+	if code := runMain(); code != 1 {
+		t.Errorf("runMain returned %d, want 1 when listener errors", code)
 	}
 }
 
