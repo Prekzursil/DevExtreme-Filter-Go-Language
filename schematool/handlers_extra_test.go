@@ -113,6 +113,27 @@ func TestWriteSchemaResponse_Success(t *testing.T) {
 	}
 }
 
+// brokenWriter always errors on Write so json.Encoder fails.
+type brokenWriter struct {
+	header http.Header
+	status int
+}
+
+func (b *brokenWriter) Header() http.Header {
+	if b.header == nil {
+		b.header = http.Header{}
+	}
+	return b.header
+}
+
+func (b *brokenWriter) Write([]byte) (int, error) { return 0, errors.New("writer broken") }
+func (b *brokenWriter) WriteHeader(s int)         { b.status = s }
+
+func TestWriteSchemaResponse_EncodeError(t *testing.T) {
+	w := &brokenWriter{}
+	writeSchemaResponse(w, map[string]string{"a": "b"})
+}
+
 func TestLoadSchemaDefinitionHandler_ReadErrorNotNotExist(t *testing.T) {
 	defer withTempSchemaDir(t)()
 	_ = os.MkdirAll(SchemaDefinitionsDir, 0755)
