@@ -110,18 +110,16 @@ func persistSchemaDefinition(req SchemaRequest) {
 }
 
 // safeEntityFilename takes the raw entity name from an HTTP request, verifies
-// it against safeEntityNameRE, and returns a `<name>.json` filename that is
-// guaranteed to contain no path separators. Taint analyzers (CodeQL S2083 /
-// Sonar gosecurity:S2083) only trust values that flow through this helper.
+// it against safeEntityNameRE, and returns a `<name>.json` filename. The
+// regex accepts only [A-Za-z0-9_-]+, which contains no path separators, so
+// the returned value is safe to pass to filepath.Join. Taint analyzers
+// (CodeQL S2083 / Sonar gosecurity:S2083) only trust values that flow
+// through this helper.
 func safeEntityFilename(raw string) (string, bool) {
 	if err := validateEntityName(raw); err != nil {
 		return "", false
 	}
-	cleaned := filepath.Base(raw)
-	if cleaned != raw || strings.ContainsAny(cleaned, `/\`) {
-		return "", false
-	}
-	return cleaned + ".json", true
+	return raw + ".json", true
 }
 
 // ListSchemaDefinitionsHandler lists saved schema definition files.
