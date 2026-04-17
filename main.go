@@ -170,7 +170,7 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 func decodeFilterRequest(w http.ResponseWriter, r *http.Request) (*filterRequest, bool) {
 	var req filterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Backend: Error decoding request body: %v", err)
+		log.Print("Backend: Error decoding request body (details suppressed for log-injection guard)")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return nil, false
 	}
