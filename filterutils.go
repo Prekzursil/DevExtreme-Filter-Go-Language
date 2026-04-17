@@ -168,40 +168,38 @@ func combineGroupParts(adapter EntityAdapter, predicates []PredicateFunc, ops []
 func convertToInt(val interface{}) (int, error) {
 	switch v := val.(type) {
 	case float64:
-		// Check if float64 has a fractional part
-		if v != float64(int(v)) {
-			return 0, fmt.Errorf("cannot convert float %f to int as it has a fractional part", v)
-		}
-		return int(v), nil
+		return floatToInt(v)
 	case float32:
-		if v != float32(int(v)) {
-			return 0, fmt.Errorf("cannot convert float32 %f to int as it has a fractional part", v)
-		}
-		return int(v), nil
+		return floatToInt(float64(v))
 	case int:
 		return v, nil
 	case int32:
 		return int(v), nil
 	case int64:
-		return int(v), nil // Potential precision loss if int is 32-bit and int64 is large
+		return int(v), nil
 	case string:
-		var i int
-		_, err := fmt.Sscan(v, &i)
-		if err != nil {
-			// Try parsing as float first in case it's "10.0"
-			var f float64
-			_, ferr := fmt.Sscan(v, &f)
-			if ferr == nil {
-				if f != float64(int(f)) {
-					return 0, fmt.Errorf("cannot convert string float %s to int as it has a fractional part", v)
-				}
-				return int(f), nil
-			}
-		}
-		return i, err
-	default:
-		return 0, fmt.Errorf("cannot convert %T to int", val)
+		return stringToInt(v)
 	}
+	return 0, fmt.Errorf("cannot convert %T to int", val)
+}
+
+func floatToInt(v float64) (int, error) {
+	if v != float64(int(v)) {
+		return 0, fmt.Errorf("cannot convert float %f to int as it has a fractional part", v)
+	}
+	return int(v), nil
+}
+
+func stringToInt(s string) (int, error) {
+	var i int
+	if _, err := fmt.Sscan(s, &i); err == nil {
+		return i, nil
+	}
+	var f float64
+	if _, err := fmt.Sscan(s, &f); err != nil {
+		return 0, fmt.Errorf("cannot convert %q to int", s)
+	}
+	return floatToInt(f)
 }
 
 // Helper to convert to time.Time (from string)

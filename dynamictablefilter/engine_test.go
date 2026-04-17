@@ -83,17 +83,25 @@ func TestLoadTableSchema(t *testing.T) {
 	}
 }
 
-func TestLoadTableSchema_InvalidJSON(t *testing.T) {
+func writeBrokenTable(t *testing.T, filename string, content []byte) {
+	t.Helper()
 	orig := GetBaseTablesPath()
-	defer SetBaseTablesPath(orig)
+	t.Cleanup(func() { SetBaseTablesPath(orig) })
 
 	tmp := t.TempDir()
 	SetBaseTablesPath(tmp)
 
 	tableDir := filepath.Join(tmp, "broken")
-	_ = os.MkdirAll(tableDir, 0755)
-	_ = os.WriteFile(filepath.Join(tableDir, "schema.json"), []byte("not valid json"), 0644)
+	if err := os.MkdirAll(tableDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tableDir, filename), content, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
 
+func TestLoadTableSchema_InvalidJSON(t *testing.T) {
+	writeBrokenTable(t, "schema.json", []byte("not valid json"))
 	if _, err := LoadTableSchema("broken"); err == nil {
 		t.Error("expected error for invalid JSON")
 	}
@@ -119,16 +127,7 @@ func TestLoadTableData(t *testing.T) {
 }
 
 func TestLoadTableData_InvalidJSON(t *testing.T) {
-	orig := GetBaseTablesPath()
-	defer SetBaseTablesPath(orig)
-
-	tmp := t.TempDir()
-	SetBaseTablesPath(tmp)
-
-	tableDir := filepath.Join(tmp, "broken")
-	_ = os.MkdirAll(tableDir, 0755)
-	_ = os.WriteFile(filepath.Join(tableDir, "data.json"), []byte("garbage"), 0644)
-
+	writeBrokenTable(t, "data.json", []byte("garbage"))
 	if _, err := LoadTableData("broken"); err == nil {
 		t.Error("expected error for invalid JSON")
 	}
