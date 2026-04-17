@@ -37,6 +37,67 @@ func TestParseGroupFilter_NonStringOperator(t *testing.T) {
 	}
 }
 
+func TestParseNotFilter_SubReturnsNil(t *testing.T) {
+	adapter, err := NewGenericEntAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction schema: %v", err)
+	}
+
+	// "!" applied to an empty array returns nil predicate; the NOT should
+	// propagate nil rather than wrap it.
+	filter := []interface{}{"!", []interface{}{}}
+	pred, err := ParseFilterToPredicates(adapter, filter)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if pred != nil {
+		t.Errorf("expected nil predicate when NOT-ing empty filter, got %v", pred)
+	}
+}
+
+func TestParseGroupFilter_AllNilPredicates(t *testing.T) {
+	adapter, err := NewGenericEntAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction schema: %v", err)
+	}
+
+	// Group of empty arrays resolves to zero predicates after collecting.
+	filter := []interface{}{
+		[]interface{}{},
+		"and",
+		[]interface{}{},
+	}
+	pred, err := ParseFilterToPredicates(adapter, filter)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if pred != nil {
+		t.Errorf("expected nil predicate when all sub-filters are empty")
+	}
+}
+
+func TestParseGroupFilter_SinglePredicateAfterFiltering(t *testing.T) {
+	adapter, err := NewGenericEntAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction schema: %v", err)
+	}
+
+	// First sub-filter is empty (contributes nil), second is valid — group
+	// should reduce to the single valid predicate.
+	filter := []interface{}{
+		[]interface{}{},
+		"and",
+		[]interface{}{"amount", "=", 100.0},
+	}
+	pred, err := ParseFilterToPredicates(adapter, filter)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if pred == nil {
+		t.Error("expected valid predicate")
+	}
+}
+
 func TestTrySimpleCondition_LogicalOpAsField(t *testing.T) {
 	adapter, err := NewGenericEntAdapter("transaction")
 	if err != nil {

@@ -249,6 +249,12 @@ func TestGenericAdapter_TimeFieldPassThrough(t *testing.T) {
 	}
 }
 
+func TestCoerceToBool_UnsupportedType(t *testing.T) {
+	if _, err := coerceToBool(42, "somefield"); err == nil {
+		t.Error("expected error for int value on bool field")
+	}
+}
+
 func TestFieldMapCaseInsensitive(t *testing.T) {
 	cleanup := writeTempSchema(t, "casetest", []fieldSpec{
 		{Name: "MixedCase", Type: "string"},
