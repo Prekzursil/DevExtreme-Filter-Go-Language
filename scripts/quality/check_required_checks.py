@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-from __future__ import annotations
+from __future__ import absolute_import, division
 
 import argparse
 import json
 import os
 import sys
 import time
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_HELPER_ROOT = _SCRIPT_DIR if os.path.exists(str(_SCRIPT_DIR / "security_helpers.py")) else _SCRIPT_DIR.parent
+if str(_HELPER_ROOT) not in sys.path:
+    sys.path.insert(0, str(_HELPER_ROOT))
+
+from security_helpers import request_https_json, safe_output_path_in_workspace  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
@@ -27,7 +32,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
     url = f"https://api.github.com/repos/{repo}/{path.lstrip('/')}"
-    req = urllib.request.Request(
+    payload, _ = request_https_json(
         url,
         headers={
             "Accept": "application/vnd.github+json",
@@ -36,9 +41,11 @@ def _api_get(repo: str, path: str, token: str) -> dict[str, Any]:
             "User-Agent": "reframe-quality-zero-gate",
         },
         method="GET",
+        allowed_hosts={"api.github.com"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("Unexpected GitHub API response payload")
+    return payload
 
 
 def _collect_contexts(check_runs_payload: dict[str, Any], status_payload: dict[str, Any]) -> dict[str, dict[str, str]]:
@@ -121,19 +128,6 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
-
-
 def main() -> int:
     args = _parse_args()
     token = (os.environ.get("GITHUB_TOKEN", "") or os.environ.get("GH_TOKEN", "")).strip()
@@ -177,8 +171,8 @@ def main() -> int:
         raise SystemExit("No payload collected")
 
     try:
-        out_json = _safe_output_path(args.out_json, "quality-zero-gate/required-checks.json")
-        out_md = _safe_output_path(args.out_md, "quality-zero-gate/required-checks.md")
+        out_json = safe_output_path_in_workspace(args.out_json, "quality-zero-gate/required-checks.json")
+        out_md = safe_output_path_in_workspace(args.out_md, "quality-zero-gate/required-checks.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

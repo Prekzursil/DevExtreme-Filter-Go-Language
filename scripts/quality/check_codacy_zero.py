@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.parse
@@ -16,7 +17,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 
 TOTAL_KEYS = {"total", "totalItems", "total_items", "count", "hits", "open_issues"}
@@ -101,22 +102,55 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
+def _provider_candidates(provider: str) -> list[str]:
+    return list(dict.fromkeys(candidate for candidate in (provider, "gh", "github") if candidate))
 
 
-def main() -> int:
-    import os
+def _query_open_issues(
+    api_base: str,
+    token: str,
+    owner: str,
+    repo: str,
+    providers: list[str],
+) -> tuple[int | None, list[str], str]:
+    findings: list[str] = []
+    open_issues: int | None = None
+    query = urllib.parse.urlencode({"limit": "1"})
+    last_exc: Exception | None = None
 
+    for provider in providers:
+        url = (
+            f"{api_base}/api/v3/analysis/organizations/{provider}/"
+            f"{owner}/repositories/{repo}/issues/search?{query}"
+        )
+        try:
+            payload = _request_json(url, token, method="POST", data={})
+            open_issues = extract_total_open(payload)
+            if open_issues is None:
+                findings.append("Codacy response did not include a parseable total issue count.")
+            elif open_issues != 0:
+                findings.append(f"Codacy reports {open_issues} open issues (expected 0).")
+            return open_issues, findings, "pass" if not findings else "fail"
+        except urllib.error.HTTPError as exc:
+            last_exc = exc
+            if exc.code == 404:
+                continue
+            findings.append(f"Codacy API request failed: HTTP {exc.code}")
+            return open_issues, findings, "fail"
+        except (urllib.error.URLError, ValueError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
+            last_exc = exc
+            findings.append(f"Codacy API request failed: {exc}")
+            return open_issues, findings, "fail"
+
+    findings.append(
+        f"Codacy API endpoint was not found for provider(s): {', '.join(providers)}."
+    )
+    if last_exc is not None:
+        findings.append(f"Last Codacy API error: {last_exc}")
+    return open_issues, findings, "fail"
+
+
+def main() -> int:  # pylint: disable=too-many-locals,too-many-statements
     args = _parse_args()
     token = (args.token or os.environ.get("CODACY_API_TOKEN", "")).strip()
     api_base = normalize_https_url(CODACY_API_BASE, allowed_hosts={"api.codacy.com"}).rstrip("/")
@@ -130,44 +164,13 @@ def main() -> int:
         findings.append("CODACY_API_TOKEN is missing.")
         status = "fail"
     else:
-        query = urllib.parse.urlencode({"limit": "1"})
-        provider_candidates = [args.provider, "gh", "github"]
-        provider_candidates = list(dict.fromkeys(p for p in provider_candidates if p))
-
-        last_exc: Exception | None = None
-        for provider in provider_candidates:
-            url = (
-                f"{api_base}/api/v3/analysis/organizations/{provider}/"
-                f"{owner}/repositories/{repo}/issues/search?{query}"
-            )
-            try:
-                payload = _request_json(url, token, method="POST", data={})
-                open_issues = extract_total_open(payload)
-                if open_issues is None:
-                    findings.append("Codacy response did not include a parseable total issue count.")
-                elif open_issues != 0:
-                    findings.append(f"Codacy reports {open_issues} open issues (expected 0).")
-                status = "pass" if not findings else "fail"
-                break
-            except urllib.error.HTTPError as exc:
-                last_exc = exc
-                if exc.code == 404:
-                    continue
-                findings.append(f"Codacy API request failed: HTTP {exc.code}")
-                status = "fail"
-                break
-            except Exception as exc:  # pragma: no cover - network/runtime surface
-                last_exc = exc
-                findings.append(f"Codacy API request failed: {exc}")
-                status = "fail"
-                break
-        else:
-            findings.append(
-                f"Codacy API endpoint was not found for provider(s): {', '.join(provider_candidates)}."
-            )
-            if last_exc is not None:
-                findings.append(f"Last Codacy API error: {last_exc}")
-            status = "fail"
+        open_issues, findings, status = _query_open_issues(
+            api_base,
+            token,
+            owner,
+            repo,
+            _provider_candidates(args.provider),
+        )
 
     payload = {
         "status": status,
@@ -180,8 +183,8 @@ def main() -> int:
     }
 
     try:
-        out_json = _safe_output_path(args.out_json, "codacy-zero/codacy.json")
-        out_md = _safe_output_path(args.out_md, "codacy-zero/codacy.md")
+        out_json = safe_output_path_in_workspace(args.out_json, "codacy-zero/codacy.json")
+        out_md = safe_output_path_in_workspace(args.out_md, "codacy-zero/codacy.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1

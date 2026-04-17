@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -15,7 +17,7 @@ _HELPER_ROOT = _SCRIPT_DIR if (_SCRIPT_DIR / "security_helpers.py").exists() els
 if str(_HELPER_ROOT) not in sys.path:
     sys.path.insert(0, str(_HELPER_ROOT))
 
-from security_helpers import normalize_https_url
+from security_helpers import normalize_https_url, safe_output_path_in_workspace  # noqa: E402  # pylint: disable=wrong-import-position
 
 SENTRY_API_BASE = "https://sentry.io/api/0"
 
@@ -91,66 +93,68 @@ def _render_md(payload: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _safe_output_path(raw: str, fallback: str, base: Path | None = None) -> Path:
-    root = (base or Path.cwd()).resolve()
-    candidate = Path((raw or "").strip() or fallback).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve(strict=False)
-    try:
-        resolved.relative_to(root)
-    except ValueError as exc:
-        raise ValueError(f"Output path escapes workspace root: {candidate}") from exc
-    return resolved
+def _resolve_projects(explicit_projects: list[str]) -> list[str]:
+    projects = [project for project in explicit_projects if project]
+    if projects:
+        return projects
+    return [
+        value
+        for env_name in ("SENTRY_PROJECT_BACKEND", "SENTRY_PROJECT_WEB")
+        if (value := str(os.environ.get(env_name, "")).strip())
+    ]
 
 
-def main() -> int:
-    import os
-
-    args = _parse_args()
-    token = (args.token or os.environ.get("SENTRY_AUTH_TOKEN", "")).strip()
-    org = (args.org or os.environ.get("SENTRY_ORG", "")).strip()
-    api_base = normalize_https_url(SENTRY_API_BASE, allowed_hosts={"sentry.io"}).rstrip("/")
-
-    projects = [p for p in args.project if p]
-    if not projects:
-        for env_name in ("SENTRY_PROJECT_BACKEND", "SENTRY_PROJECT_WEB"):
-            value = str(os.environ.get(env_name, "")).strip()
-            if value:
-                projects.append(value)
-
+def _missing_configuration_findings(token: str, org: str, projects: list[str]) -> list[str]:
     findings: list[str] = []
-    project_results: list[dict[str, Any]] = []
-
     if not token:
         findings.append("SENTRY_AUTH_TOKEN is missing.")
     if not org:
         findings.append("SENTRY_ORG is missing.")
     if not projects:
         findings.append("No Sentry projects configured (SENTRY_PROJECT_BACKEND/SENTRY_PROJECT_WEB).")
+    return findings
+
+
+def _project_result(api_base: str, token: str, org: str, project: str) -> tuple[dict[str, Any], list[str]]:
+    query = urllib.parse.urlencode({"query": "is:unresolved", "limit": "1"})
+    org_slug = urllib.parse.quote(org, safe="")
+    project_slug = urllib.parse.quote(project, safe="")
+    url = f"{api_base}/projects/{org_slug}/{project_slug}/issues/?{query}"
+    issues, headers = _request(url, token)
+    unresolved = _hits_from_headers(headers)
+    findings: list[str] = []
+    if unresolved is None:
+        unresolved = len(issues)
+        if unresolved >= 1:
+            findings.append(
+                f"Sentry project {project} returned unresolved issues but no X-Hits header for exact totals."
+            )
+    if unresolved != 0:
+        findings.append(f"Sentry project {project} has {unresolved} unresolved issues (expected 0).")
+    return {"project": project, "unresolved": unresolved}, findings
+
+
+def main() -> int:  # pylint: disable=too-many-locals,too-many-branches
+    args = _parse_args()
+    token = (args.token or os.environ.get("SENTRY_AUTH_TOKEN", "")).strip()
+    org = (args.org or os.environ.get("SENTRY_ORG", "")).strip()
+    api_base = normalize_https_url(SENTRY_API_BASE, allowed_hosts={"sentry.io"}).rstrip("/")
+
+    projects = _resolve_projects(args.project)
+
+    findings = _missing_configuration_findings(token, org, projects)
+    project_results: list[dict[str, Any]] = []
 
     status = "fail"
     if not findings:
         try:
             for project in projects:
-                query = urllib.parse.urlencode({"query": "is:unresolved", "limit": "1"})
-                org_slug = urllib.parse.quote(org, safe="")
-                project_slug = urllib.parse.quote(project, safe="")
-                url = f"{api_base}/projects/{org_slug}/{project_slug}/issues/?{query}"
-                issues, headers = _request(url, token)
-                unresolved = _hits_from_headers(headers)
-                if unresolved is None:
-                    unresolved = len(issues)
-                    if unresolved >= 1:
-                        findings.append(
-                            f"Sentry project {project} returned unresolved issues but no X-Hits header for exact totals."
-                        )
-                if unresolved != 0:
-                    findings.append(f"Sentry project {project} has {unresolved} unresolved issues (expected 0).")
-                project_results.append({"project": project, "unresolved": unresolved})
+                project_result, project_findings = _project_result(api_base, token, org, project)
+                project_results.append(project_result)
+                findings.extend(project_findings)
 
             status = "pass" if not findings else "fail"
-        except Exception as exc:  # pragma: no cover - network/runtime surface
+        except (urllib.error.URLError, ValueError, RuntimeError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
             findings.append(f"Sentry API request failed: {exc}")
             status = "fail"
 
@@ -163,8 +167,8 @@ def main() -> int:
     }
 
     try:
-        out_json = _safe_output_path(args.out_json, "sentry-zero/sentry.json")
-        out_md = _safe_output_path(args.out_md, "sentry-zero/sentry.md")
+        out_json = safe_output_path_in_workspace(args.out_json, "sentry-zero/sentry.json")
+        out_md = safe_output_path_in_workspace(args.out_md, "sentry-zero/sentry.md")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 1
