@@ -35,7 +35,7 @@ func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, err := generateSchemaPayload(*req)
 	if err != nil {
-		log.Printf("Error generating schema payload: %v", err)
+		log.Print("Error generating schema payload (details suppressed for log-injection guard)")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -68,13 +68,14 @@ func generateSchemaPayload(req SchemaRequest) (map[string]string, error) {
 func writeSchemaResponse(w http.ResponseWriter, payload map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("Error encoding schema/adapter code response: %v", err)
+		log.Print("Error encoding schema/adapter code response (details suppressed)")
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
 }
 
 func persistSchemaDefinition(req SchemaRequest) {
-	if err := validateEntityName(req.EntityName); err != nil {
+	safeName, ok := safeEntityFilename(req.EntityName)
+	if !ok {
 		log.Print("Not persisting schema: entity name failed validation")
 		return
 	}
@@ -82,7 +83,7 @@ func persistSchemaDefinition(req SchemaRequest) {
 		log.Print("Error creating schema_definitions directory (details suppressed)")
 		return
 	}
-	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
+	filePath := filepath.Join(SchemaDefinitionsDir, safeName)
 	data, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {
 		log.Print("Error marshalling schema definition for saving (details suppressed)")
@@ -93,6 +94,21 @@ func persistSchemaDefinition(req SchemaRequest) {
 		return
 	}
 	log.Print("Saved schema definition (path validated)")
+}
+
+// safeEntityFilename takes the raw entity name from an HTTP request, verifies
+// it against safeEntityNameRE, and returns a `<name>.json` filename that is
+// guaranteed to contain no path separators. Taint analyzers (CodeQL S2083 /
+// Sonar gosecurity:S2083) only trust values that flow through this helper.
+func safeEntityFilename(raw string) (string, bool) {
+	if err := validateEntityName(raw); err != nil {
+		return "", false
+	}
+	cleaned := filepath.Base(raw)
+	if cleaned != raw || strings.ContainsAny(cleaned, `/\`) {
+		return "", false
+	}
+	return cleaned + ".json", true
 }
 
 // ListSchemaDefinitionsHandler lists saved schema definition files.
