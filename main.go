@@ -149,13 +149,13 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	predicate, err := ParseFilterToPredicates(adapter, req.Filter)
 	if err != nil {
-		log.Printf("Backend: Error parsing filter for entity '%s': %v", req.Entity, err)
+		log.Printf("Backend: Error parsing filter (entity resolved): %v", err)
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
 		return
 	}
 	results, err := runEntityQuery(context.Background(), req.Entity, predicate)
 	if err != nil {
-		log.Printf("Backend: Error executing query for entity '%s': %v", req.Entity, err)
+		log.Printf("Backend: Error executing query (entity resolved): %v", err)
 		status := http.StatusInternalServerError
 		if errors.Is(err, errUnsupportedEntity) {
 			status = http.StatusBadRequest
@@ -179,14 +179,14 @@ func decodeFilterRequest(w http.ResponseWriter, r *http.Request) (*filterRequest
 		http.Error(w, "Missing 'entity' field in request body", http.StatusBadRequest)
 		return nil, false
 	}
-	log.Printf("Backend: Decoded request for entity '%s'", req.Entity)
+	log.Print("Backend: Decoded filter request")
 	return &req, true
 }
 
 func resolveAdapter(w http.ResponseWriter, entity string) (EntityAdapter, bool) {
 	adapter, err := GetAdapter(entity)
 	if err != nil {
-		log.Printf("Backend: Failed to get adapter for entity '%s': %v", entity, err)
+		log.Printf("Backend: Failed to get adapter (entity name suppressed): %v", err)
 		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", entity), http.StatusBadRequest)
 		return nil, false
 	}
@@ -211,7 +211,7 @@ func runEntityQuery(ctx context.Context, entity string, predicate PredicateFunc)
 	case "test3schema":
 		return queryTest3Schema(ctx, predicate, apply)
 	}
-	log.Printf("Backend: Unsupported entity type for filtering: %s", entity)
+	log.Print("Backend: Unsupported entity type for filtering (suppressed)")
 	return nil, fmt.Errorf("%w: %s", errUnsupportedEntity, entity)
 }
 
