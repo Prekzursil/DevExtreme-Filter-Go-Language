@@ -9,19 +9,17 @@ import (
 	"time"
 
 	"transaction-filter-backend/ent"
-	// For in-memory SQLite. No longer using enttest directly after TestMain change.
-	_ "github.com/mattn/go-sqlite3" // SQLite driver
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var testClient *ent.Client
 
-// TestMain sets up the in-memory SQLite database for tests and tears it down.
 func TestMain(m *testing.M) {
-	log.Println("TestMain: START")
-	var errOpen error
-	testClient, errOpen = ent.Open("sqlite3", "file:ent_test_main?mode=memory&cache=shared&_fk=1")
-	if errOpen != nil {
-		log.Fatalf("failed opening connection to sqlite: %v", errOpen)
+	var err error
+	testClient, err = ent.Open("sqlite3", "file:ent_test_main?mode=memory&cache=shared&_fk=1")
+	if err != nil {
+		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
 	defer testClient.Close()
 
@@ -32,19 +30,11 @@ func TestMain(m *testing.M) {
 	originalClient := client
 	client = testClient
 
-	// Adapters should be registered by their init() functions.
-	// e.g. init() in transaction_adapter.go, test1schema_adapter.go etc.
-
-	log.Println("TestMain: Generating test transactions...")
 	generateTestTransactions(testClient, 50)
-	log.Println("TestMain: Test transactions generated.")
 
-	log.Println("TestMain: Calling m.Run()...")
 	code := m.Run()
-	log.Printf("TestMain: m.Run() finished with code %d.", code)
 
 	client = originalClient
-	log.Println("TestMain: Restored original client. Exiting.")
 	os.Exit(code)
 }
 
@@ -54,154 +44,120 @@ func generateTestTransactions(c *ent.Client, count int) {
 	types := []string{"Test Debit", "Sample Credit"}
 
 	for i := 0; i < count; i++ {
-		baseDay := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
-		transactionDate := time.Date(
-			baseDay.Year(), baseDay.Month(), baseDay.Day(),
-			i%24, (i*13)%60, (i*7)%60, 0, time.UTC,
-		)
-
-		_, err := c.Transaction.Create().
+		base := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i)
+		d := time.Date(base.Year(), base.Month(), base.Day(), i%24, (i*13)%60, (i*7)%60, 0, time.UTC)
+		if _, err := c.Transaction.Create().
 			SetAmount(float64((i%10 + 1) * 100)).
-			SetDate(transactionDate).
+			SetDate(d).
 			SetName(fmt.Sprintf("Test Trans %d", i)).
 			SetLocation(locations[i%len(locations)]).
 			SetCategory(categories[i%len(categories)]).
 			SetType(types[i%len(types)]).
-			Save(context.Background())
-		if err != nil {
+			Save(context.Background()); err != nil {
 			log.Fatalf("failed generating test transaction %d: %v", i, err)
 		}
 	}
-	log.Printf("Generated %d test transactions", count)
 }
 
-func TestFilterTransactions(t *testing.T) {
-	// Helper for creating date objects for test data consistency
-	// makeDate := func(year int, month time.Month, day int, hour int, min int, sec int) time.Time {
-	// 	return time.Date(year, month, day, hour, min, sec, 0, time.UTC)
-	// }
+type filterCase struct {
+	name          string
+	filterInput   interface{}
+	expectError   bool
+}
 
-	type asserterFunc func(t *testing.T, transactions []Transaction)
+func parseFilterCase(t *testing.T, tc filterCase) {
+	t.Helper()
+	adapter, err := GetAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction adapter: %v", err)
+	}
+	_, err = ParseFilterToPredicates(adapter, tc.filterInput)
+	if tc.expectError && err == nil {
+		t.Errorf("%s: expected error, got nil", tc.name)
+	}
+	if !tc.expectError && err != nil {
+		t.Errorf("%s: unexpected error: %v", tc.name, err)
+	}
+}
 
-	testCases := []struct {
-		name          string
-		filterInput   interface{}
-		expectedCount int
-		expectedError bool
-		asserters     []asserterFunc
-	}{
-		{
-			name:          "No filter (nil input)",
-			filterInput:   nil,
-			expectedCount: 50,
-		},
-		{
-			name:          "Empty filter array",
-			filterInput:   []interface{}{},
-			expectedCount: 50,
-		},
-		{
-			name:          "Amount equals 100",
-			filterInput:   []interface{}{"amount", "=", 100},
-			expectedCount: 5,
-			asserters: []asserterFunc{func(t *testing.T, transactions []Transaction) {
-				for _, tr := range transactions {
-					if tr.Amount != 100 {
-						t.Errorf("Expected amount to be 100, got %f for ID %d", tr.Amount, tr.ID)
-					}
-				}
-			}},
-		},
-		{
-			name:          "Amount greater than 500",
-			filterInput:   []interface{}{"amount", ">", 500},
-			expectedCount: 25,
-		},
-		{
-			name:          "Amount between 200 and 400 inclusive",
-			filterInput:   []interface{}{"amount", "between", []interface{}{200.0, 400.0}},
-			expectedCount: 15,
-		},
-		{
-			name:          "Name contains 'Trans 1'",
-			filterInput:   []interface{}{"name", "contains", "Trans 1"},
-			expectedCount: 11,
-		},
-		{
-			name: "Complex: (Name contains 'Trans 0' OR Name contains 'Trans 1') AND Amount = 100",
-			filterInput: []interface{}{
-				[]interface{}{
-					[]interface{}{"name", "contains", "Trans 0"},
-					"or",
-					[]interface{}{"name", "contains", "Trans 1"},
-				},
-				"and",
-				[]interface{}{"amount", "=", 100},
+func TestFilterTransactions_NilFilter(t *testing.T) {
+	parseFilterCase(t, filterCase{name: "nil filter", filterInput: nil})
+}
+
+func TestFilterTransactions_EmptyArray(t *testing.T) {
+	parseFilterCase(t, filterCase{name: "empty array", filterInput: []interface{}{}})
+}
+
+func TestFilterTransactions_SimpleEquality(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "amount equals",
+		filterInput: []interface{}{"amount", "=", 100.0},
+	})
+}
+
+func TestFilterTransactions_GreaterThan(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "amount > 500",
+		filterInput: []interface{}{"amount", ">", 500.0},
+	})
+}
+
+func TestFilterTransactions_Between(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "amount between",
+		filterInput: []interface{}{"amount", "between", []interface{}{200.0, 400.0}},
+	})
+}
+
+func TestFilterTransactions_Contains(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "name contains",
+		filterInput: []interface{}{"name", "contains", "Trans 1"},
+	})
+}
+
+func TestFilterTransactions_ComplexGroup(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name: "complex group",
+		filterInput: []interface{}{
+			[]interface{}{
+				[]interface{}{"name", "contains", "Trans 0"},
+				"or",
+				[]interface{}{"name", "contains", "Trans 1"},
 			},
-			expectedCount: 2,
+			"and",
+			[]interface{}{"amount", "=", 100.0},
 		},
-		{
-			name:          "Filter on non-existent field",
-			filterInput:   []interface{}{"nonexistentfield", "=", "value"},
-			expectedError: true,
-		},
-		{
-			name:          "Malformed filter - dangling operator",
-			filterInput:   []interface{}{[]interface{}{"amount", "=", 100}, "and"},
-			expectedError: true,
-		},
+	})
+}
+
+func TestFilterTransactions_NonExistentField(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "non-existent field",
+		filterInput: []interface{}{"nonexistentfield", "=", "value"},
+		expectError: true,
+	})
+}
+
+func TestFilterTransactions_DanglingOperator(t *testing.T) {
+	parseFilterCase(t, filterCase{
+		name:        "dangling operator",
+		filterInput: []interface{}{[]interface{}{"amount", "=", 100.0}, "and"},
+		expectError: true,
+	})
+}
+
+func TestFilterTransactions_RealQuery(t *testing.T) {
+	adapter, err := GetAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction adapter: %v", err)
 	}
 
-	for _, tc := range testCases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Logf("TestFilterTransactions: STARTING test case '%s'", tc.name)
-
-			var transactions []Transaction
-			var err error
-
-			if tc.filterInput != nil {
-				if _, ok := tc.filterInput.([]interface{}); !ok && tc.expectedError {
-					err = fmt.Errorf("simulated: filter input not an array")
-				}
-			}
-			if tc.name == "Filter on non-existent field" && tc.expectedError {
-				err = fmt.Errorf("simulated: no adapter for field or field not found")
-			}
-			if tc.name == "Malformed filter - dangling operator" && tc.expectedError {
-				err = fmt.Errorf("simulated: malformed group filter")
-			}
-
-			t.Logf("Test case '%s' - filter logic is currently bypassed in test. Filter was: %+v", tc.name, tc.filterInput)
-
-			if tc.expectedError {
-				if err == nil {
-					t.Logf("Expected an error for test case '%s', but got nil (actual error checking bypassed).", tc.name)
-				} else {
-					t.Logf("Correctly expected an error and got one (simulated or actual): %v", err)
-				}
-				return
-			}
-
-			if err != nil {
-				t.Fatalf("filterTransactions (simulated) returned an unexpected error: %v", err)
-			}
-
-			if !tc.expectedError {
-				if len(transactions) != tc.expectedCount {
-					t.Logf("Expected %d transactions, got %d. Result assertion bypassed as transactions are not fetched.", tc.expectedCount, len(transactions))
-				} else if tc.expectedCount == 0 && len(transactions) == 0 {
-					t.Logf("Correctly expected 0 transactions and got 0 (as transactions are not fetched).")
-				}
-			}
-
-			// for _, asserter := range tc.asserters { // asserter loop variable commented out
-			// 	// asserter(t, transactions) // Bypassed
-			// 	t.Logf("Asserter for test case '%s' bypassed.", tc.name)
-			// }
-			if tc.asserters != nil {
-				t.Logf("Asserter execution bypassed for test case '%s'.", tc.name)
-			}
-		})
+	pred, err := ParseFilterToPredicates(adapter, []interface{}{"amount", "=", 100.0})
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+	if pred == nil {
+		t.Fatal("expected non-nil predicate")
 	}
 }

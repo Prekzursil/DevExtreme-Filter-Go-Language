@@ -1,0 +1,9 @@
+.claude/
+.remember/
+*.exe
+*.log
+coverage/
+coverage.out
+coverage.xml
+tests.exe
+test_output.log

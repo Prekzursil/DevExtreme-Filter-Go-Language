@@ -1,4 +1,4 @@
-name: CodeQL
+name: codeql
 
 permissions:
   actions: read
@@ -17,15 +17,55 @@ on:
   workflow_dispatch:
 
 jobs:
-  codeql:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       security-events: write
-    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-codeql.yml@fbb2255753788b93cc79ec917c764d0fc4f52146
-    with:
-      repo_slug: ${{ github.repository }}
-      event_name: ${{ github.event_name }}
-      sha: ${{ github.event.pull_request.head.sha || github.sha }}
-      platform_repository: Prekzursil/quality-zero-platform
-      platform_ref: main
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: autobuild
+          - language: actions
+            build-mode: none
+          - language: python
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: ${{ matrix.language == 'go' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.3"
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-and-quality
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  CodeQL:
+    name: CodeQL
+    needs: analyze
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify analyses succeeded
+        run: |
+          if [[ "${{ needs.analyze.result }}" != "success" ]]; then
+            echo "One or more CodeQL analyses failed: ${{ needs.analyze.result }}"
+            exit 1
+          fi
+          echo "All CodeQL analyses succeeded."

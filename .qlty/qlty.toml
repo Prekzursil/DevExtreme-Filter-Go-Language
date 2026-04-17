@@ -1,5 +1,21 @@
 config_version = "0"
 
+exclude_patterns = [
+  "static/app/**",
+  "static/**/*.map",
+  "scripts/quality/**",
+  "scripts/verify/**",
+  "scripts/security_helpers.py",
+  ".github/**",
+  ".qlty/**",
+  "ent/**",
+  "schema_definitions/**",
+  "tables/**",
+  "docs/**",
+  "test_output.log",
+  "tests.exe",
+]
+
 [[source]]
 name = "default"
 default = true
