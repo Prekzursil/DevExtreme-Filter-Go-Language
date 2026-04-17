@@ -16,6 +16,7 @@ func TestStringToInt_PureFloatFails(t *testing.T) {
 	}
 }
 
+
 func TestConvertToInt(t *testing.T) {
 	cases := []struct {
 		name    string
