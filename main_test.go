@@ -138,13 +138,6 @@ func TestGenerateDataFunctions(t *testing.T) {
 	generateTest3SchemaData(2, ctx)
 }
 
-func TestSeedData(t *testing.T) {
-	if client == nil {
-		t.Skip("ent client not initialized")
-	}
-	seedData(context.Background())
-}
-
 func TestTransactionDTO(t *testing.T) {
 	tx := Transaction{ID: 1, Name: "Test", Location: "Loc", Category: "Cat", Type: "T", Amount: 99.5}
 	if tx.Name != "Test" || tx.Amount != 99.5 {

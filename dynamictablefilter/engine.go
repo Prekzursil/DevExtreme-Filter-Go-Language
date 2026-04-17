@@ -6,11 +6,27 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 	"transaction-filter-backend/schematool" // For SchemaRequest, SchemaFieldDefinition
 )
+
+var safeTableNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// ValidateTableName returns an error if tableName contains characters that
+// could be abused for path traversal or log injection. Callers should use
+// this before building filesystem paths or logging the name.
+func ValidateTableName(tableName string) error {
+	if tableName == "" {
+		return fmt.Errorf("table name is empty")
+	}
+	if !safeTableNameRE.MatchString(tableName) {
+		return fmt.Errorf("table name contains unsupported characters")
+	}
+	return nil
+}
 
 var currentBaseTablesPath = "./tables" // Default base path, can be changed
 
@@ -31,7 +47,10 @@ type TableSchema struct {
 }
 
 func LoadTableSchema(tableName string) (*TableSchema, error) {
-	schemaPath := filepath.Join(currentBaseTablesPath, tableName, "schema.json") // Use var
+	if err := ValidateTableName(tableName); err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	schemaPath := filepath.Join(currentBaseTablesPath, tableName, "schema.json")
 	data, err := ioutil.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
@@ -48,7 +67,10 @@ func LoadTableSchema(tableName string) (*TableSchema, error) {
 }
 
 func LoadTableData(tableName string) ([]map[string]interface{}, error) {
-	dataPath := filepath.Join(currentBaseTablesPath, tableName, "data.json") // Use var
+	if err := ValidateTableName(tableName); err != nil {
+		return nil, fmt.Errorf("invalid table name: %w", err)
+	}
+	dataPath := filepath.Join(currentBaseTablesPath, tableName, "data.json")
 	data, err := ioutil.ReadFile(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data file %s: %w", dataPath, err)

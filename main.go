@@ -256,7 +256,13 @@ func dynamicTableHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Table name missing", http.StatusBadRequest)
 		return
 	}
-	tableName := pathParts[0]
+	rawTableName := pathParts[0]
+	if err := dynamictablefilter.ValidateTableName(rawTableName); err != nil {
+		log.Printf("Error: dynamic table request with invalid name: %v", err)
+		http.Error(w, "Invalid table name", http.StatusBadRequest)
+		return
+	}
+	tableName := rawTableName
 	if len(pathParts) == 1 && r.Method == http.MethodGet {
 		http.Error(w, "Specify /schema or /filter endpoint", http.StatusBadRequest)
 		return
@@ -264,7 +270,7 @@ func dynamicTableHandler(w http.ResponseWriter, r *http.Request) {
 	if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
 		schema, err := dynamictablefilter.LoadTableSchema(tableName)
 		if err != nil {
-			log.Printf("Error loading schema for dynamic table %s: %v", tableName, err)
+			log.Printf("Error loading schema for dynamic table (path validated): %v", err)
 			if os.IsNotExist(err) {
 				http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
 			} else {
@@ -282,25 +288,25 @@ func dynamicTableHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&requestBody); err != nil {
-			log.Printf("Error decoding filter request for dynamic table %s: %v", tableName, err)
+			log.Printf("Error decoding filter request for dynamic table (path validated): %v", err)
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
 		schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
 		if errSchema != nil {
-			log.Printf("Error loading schema for dynamic table %s during filter: %v", tableName, errSchema)
+			log.Printf("Error loading schema during filter (path validated): %v", errSchema)
 			http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
 			return
 		}
 		tableData, errData := dynamictablefilter.LoadTableData(tableName)
 		if errData != nil {
-			log.Printf("Error loading data for dynamic table %s during filter: %v", tableName, errData)
+			log.Printf("Error loading data during filter (path validated): %v", errData)
 			http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
 			return
 		}
 		filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
 		if errFilter != nil {
-			log.Printf("Error filtering data for dynamic table %s: %v", tableName, errFilter)
+			log.Printf("Error filtering data (path validated): %v", errFilter)
 			http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
 			return
 		}

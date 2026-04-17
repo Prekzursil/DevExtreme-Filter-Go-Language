@@ -138,7 +138,6 @@ def _query_open_issues(
             findings.append(f"Codacy API request failed: HTTP {exc.code}")
             return open_issues, findings, "fail"
         except (urllib.error.URLError, ValueError, TimeoutError) as exc:  # pragma: no cover - network/runtime surface
-            last_exc = exc
             findings.append(f"Codacy API request failed: {exc}")
             return open_issues, findings, "fail"
 
