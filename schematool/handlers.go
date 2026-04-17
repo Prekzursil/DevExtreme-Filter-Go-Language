@@ -13,6 +13,19 @@ import (
 
 var safeEntityNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
+// Filesystem hooks — tests override these to exercise error paths without
+// needing actual filesystem failures.
+var (
+	fsMkdirAll      = os.MkdirAll
+	fsWriteFile     = os.WriteFile
+	fsReadDir       = os.ReadDir
+	fsReadFile      = os.ReadFile
+	jsonMarshalFn   = json.MarshalIndent
+	encoderEncodeFn = func(w http.ResponseWriter, v any) error {
+		return json.NewEncoder(w).Encode(v)
+	}
+)
+
 func validateEntityName(name string) error {
 	if name == "" {
 		return fmt.Errorf("entity name is empty")
@@ -67,7 +80,7 @@ func generateSchemaPayload(req SchemaRequest) (map[string]string, error) {
 
 func writeSchemaResponse(w http.ResponseWriter, payload map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
+	if err := encoderEncodeFn(w, payload); err != nil {
 		log.Print("Error encoding schema/adapter code response (details suppressed)")
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
@@ -79,17 +92,17 @@ func persistSchemaDefinition(req SchemaRequest) {
 		log.Print("Not persisting schema: entity name failed validation")
 		return
 	}
-	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
+	if err := fsMkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Print("Error creating schema_definitions directory (details suppressed)")
 		return
 	}
 	filePath := filepath.Join(SchemaDefinitionsDir, safeName)
-	data, err := json.MarshalIndent(req, "", "  ")
+	data, err := jsonMarshalFn(req, "", "  ")
 	if err != nil {
 		log.Print("Error marshalling schema definition for saving (details suppressed)")
 		return
 	}
-	if err := os.WriteFile(filePath, data, 0644); err != nil {
+	if err := fsWriteFile(filePath, data, 0644); err != nil {
 		log.Print("Error writing schema definition file (path validated, details suppressed)")
 		return
 	}
@@ -118,14 +131,14 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files, err := os.ReadDir(SchemaDefinitionsDir)
+	files, err := fsReadDir(SchemaDefinitionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode([]string{})
+			_ = encoderEncodeFn(w, []string{})
 			return
 		}
-		log.Printf("Error reading schema_definitions directory: %v", err)
+		log.Print("Error reading schema_definitions directory (details suppressed)")
 		http.Error(w, "Failed to list schema definitions", http.StatusInternalServerError)
 		return
 	}
@@ -138,8 +151,8 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(definitionNames); err != nil {
-		log.Printf("Error encoding definition names: %v", err)
+	if err := encoderEncodeFn(w, definitionNames); err != nil {
+		log.Print("Error encoding definition names (details suppressed)")
 		http.Error(w, "Failed to encode definition names", http.StatusInternalServerError)
 	}
 }

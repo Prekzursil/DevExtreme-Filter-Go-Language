@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,6 +30,22 @@ func TestListDynamicTablesHandler_ErrorResponse(t *testing.T) {
 	listDynamicTablesHandler(w, req)
 	if w.Code != http.StatusOK {
 		t.Errorf("status=%d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestListDynamicTablesHandler_ReadDirError(t *testing.T) {
+	restore := dynamictablefilter.SetReadDirForTesting(
+		func(dir string) ([]os.FileInfo, error) {
+			return nil, errors.New("permission denied")
+		},
+	)
+	defer restore()
+
+	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables", nil)
+	w := httptest.NewRecorder()
+	listDynamicTablesHandler(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusInternalServerError)
 	}
 }
 

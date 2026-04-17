@@ -1,6 +1,33 @@
 package dynamictablefilter
 
-import "testing"
+import (
+	"errors"
+	"os"
+	"testing"
+)
+
+func TestListDynamicTables_ReadDirError(t *testing.T) {
+	origRead := fsReadDir
+	defer func() { fsReadDir = origRead }()
+	fsReadDir = func(dirname string) ([]os.FileInfo, error) {
+		return nil, errors.New("permission denied")
+	}
+
+	if _, err := ListDynamicTables(); err == nil {
+		t.Error("expected error when ReadDir fails")
+	}
+}
+
+func TestSetReadDirForTesting_NilRestore(t *testing.T) {
+	// Passing nil should keep the current hook intact but still return
+	// a valid restore callback.
+	restore := SetReadDirForTesting(nil)
+	if restore == nil {
+		t.Fatal("expected non-nil restore function")
+	}
+	restore()
+}
+
 
 func TestValidateTableName(t *testing.T) {
 	cases := []struct {

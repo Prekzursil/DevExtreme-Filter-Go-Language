@@ -28,6 +28,25 @@ func ValidateTableName(tableName string) error {
 
 var currentBaseTablesPath = "./tables" // Default base path, can be changed
 
+// fsReadDir is the os.ReadDir hook for ListDynamicTables; tests swap it to
+// trigger the non-IsNotExist error path without needing real filesystem
+// failures.
+var fsReadDir = ioutil.ReadDir
+
+// SetReadDirForTesting replaces the internal directory reader with the
+// supplied function and returns a restore callback. Used from external
+// packages' tests (e.g., main package) to exercise ListDynamicTables
+// error paths without real filesystem failures.
+func SetReadDirForTesting(fn func(dir string) ([]os.FileInfo, error)) func() {
+	orig := fsReadDir
+	if fn == nil {
+		fsReadDir = orig
+	} else {
+		fsReadDir = fn
+	}
+	return func() { fsReadDir = orig }
+}
+
 // SetBaseTablesPath allows changing the base path for loading schemas/data.
 func SetBaseTablesPath(newPath string) {
 	currentBaseTablesPath = newPath
@@ -81,7 +100,7 @@ func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 }
 
 func ListDynamicTables() ([]string, error) {
-	entries, err := ioutil.ReadDir(currentBaseTablesPath) // Use var
+	entries, err := fsReadDir(currentBaseTablesPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil

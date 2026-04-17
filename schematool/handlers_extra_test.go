@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -163,6 +164,82 @@ func TestLoadSchemaDefinitionHandler_ReadErrorNotNotExist(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Logf("status=%d (expected 500 on non-notexist read error)", w.Code)
 	}
+}
+
+func TestPersistSchemaDefinition_WriteFileFailure(t *testing.T) {
+	defer withTempSchemaDir(t)()
+
+	origWrite := fsWriteFile
+	defer func() { fsWriteFile = origWrite }()
+	fsWriteFile = func(name string, data []byte, perm fs.FileMode) error {
+		return errors.New("disk full")
+	}
+
+	persistSchemaDefinition(SchemaRequest{
+		EntityName: "widgets",
+		Fields:     []SchemaFieldDefinition{{Name: "n", Type: "string"}},
+	})
+}
+
+func TestPersistSchemaDefinition_MarshalFailure(t *testing.T) {
+	defer withTempSchemaDir(t)()
+
+	origMarshal := jsonMarshalFn
+	defer func() { jsonMarshalFn = origMarshal }()
+	jsonMarshalFn = func(v any, prefix, indent string) ([]byte, error) {
+		return nil, errors.New("marshal failed")
+	}
+
+	persistSchemaDefinition(SchemaRequest{
+		EntityName: "widgets",
+		Fields:     []SchemaFieldDefinition{{Name: "n", Type: "string"}},
+	})
+}
+
+func TestPersistSchemaDefinition_MkdirFailureHook(t *testing.T) {
+	defer withTempSchemaDir(t)()
+
+	origMkdir := fsMkdirAll
+	defer func() { fsMkdirAll = origMkdir }()
+	fsMkdirAll = func(path string, perm fs.FileMode) error {
+		return errors.New("permission denied")
+	}
+
+	persistSchemaDefinition(SchemaRequest{
+		EntityName: "widgets",
+		Fields:     []SchemaFieldDefinition{{Name: "n", Type: "string"}},
+	})
+}
+
+func TestListSchemaDefinitionsHandler_ReadDirFailure(t *testing.T) {
+	origRead := fsReadDir
+	defer func() { fsReadDir = origRead }()
+	fsReadDir = func(name string) ([]os.DirEntry, error) {
+		return nil, errors.New("permission denied")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
+	w := httptest.NewRecorder()
+	ListSchemaDefinitionsHandler(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestListSchemaDefinitionsHandler_EncodeFailure(t *testing.T) {
+	origRead := fsReadDir
+	defer func() { fsReadDir = origRead }()
+	fsReadDir = func(name string) ([]os.DirEntry, error) { return nil, nil }
+
+	origEncode := encoderEncodeFn
+	defer func() { encoderEncodeFn = origEncode }()
+	encoderEncodeFn = func(w http.ResponseWriter, v any) error {
+		return errors.New("encode failed")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
+	w := httptest.NewRecorder()
+	ListSchemaDefinitionsHandler(w, req)
 }
 
 func TestGenerateSchemaCodeHandler_FullRoundTrip(t *testing.T) {
