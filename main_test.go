@@ -251,6 +251,10 @@ func TestRunMain_Success(t *testing.T) {
 	defer func() { listenAndServe = origLAS }()
 	listenAndServe = func(addr string, h http.Handler) error { return nil }
 
+	origClose := closeClient
+	defer func() { closeClient = origClose }()
+	closeClient = func() {}
+
 	if code := runMain(); code != 0 {
 		t.Errorf("runMain returned %d, want 0", code)
 	}
@@ -260,6 +264,10 @@ func TestRunMain_PrepareError(t *testing.T) {
 	orig := client
 	client = nil
 	defer func() { client = orig }()
+
+	origClose := closeClient
+	defer func() { closeClient = origClose }()
+	closeClient = func() {}
 
 	if code := runMain(); code != 1 {
 		t.Errorf("runMain returned %d, want 1 when client is nil", code)
@@ -280,8 +288,40 @@ func TestRunMain_ListenerError(t *testing.T) {
 		return errors.New("listener refused")
 	}
 
+	origClose := closeClient
+	defer func() { closeClient = origClose }()
+	closeClient = func() {}
+
 	if code := runMain(); code != 1 {
 		t.Errorf("runMain returned %d, want 1 when listener errors", code)
+	}
+}
+
+func TestMain_ExitCode(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	origCount := defaultSeedCount
+	defer func() { defaultSeedCount = origCount }()
+	defaultSeedCount = 0
+
+	origLAS := listenAndServe
+	defer func() { listenAndServe = origLAS }()
+	listenAndServe = func(addr string, h http.Handler) error { return nil }
+
+	origClose := closeClient
+	defer func() { closeClient = origClose }()
+	closeClient = func() {}
+
+	origExit := osExit
+	defer func() { osExit = origExit }()
+	var captured int
+	osExit = func(code int) { captured = code }
+
+	main()
+
+	if captured != 0 {
+		t.Errorf("main() exit code=%d, want 0", captured)
 	}
 }
 

@@ -388,6 +388,15 @@ func startServer() (http.Handler, error) {
 // no-op function to exercise runMain without binding a real listener.
 var listenAndServe = http.ListenAndServe
 
+// closeClient is the close-ent-client hook. Tests override it with a no-op
+// so they can exercise runMain without terminating the in-memory database
+// that other tests rely on.
+var closeClient = func() {
+	if client != nil {
+		_ = client.Close()
+	}
+}
+
 // runMain is the fully-testable entry point: it returns an exit code so
 // tests don't have to intercept os.Exit / log.Fatal. main() below calls
 // os.Exit with the returned code.
@@ -405,13 +414,10 @@ func runMain() int {
 	return 0
 }
 
-func closeClient() {
-	if client == nil {
-		return
-	}
-	_ = client.Close()
-}
+// osExit is the os.Exit hook. Tests replace it so they can exercise main()
+// without killing the test process.
+var osExit = os.Exit
 
 func main() {
-	os.Exit(runMain())
+	osExit(runMain())
 }
