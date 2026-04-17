@@ -139,10 +139,15 @@ func TestFilterTransactions_NonExistentField(t *testing.T) {
 	})
 }
 
-func TestFilterTransactions_DanglingOperator(t *testing.T) {
+func TestFilterTransactions_MismatchedOperators(t *testing.T) {
 	parseFilterCase(t, filterCase{
-		name:        "dangling operator",
-		filterInput: []interface{}{[]interface{}{"amount", "=", 100.0}, "and"},
+		name: "more operators than predicates",
+		filterInput: []interface{}{
+			[]interface{}{"amount", "=", 100.0},
+			"and",
+			[]interface{}{"amount", "=", 200.0},
+			"and",
+		},
 		expectError: true,
 	})
 }

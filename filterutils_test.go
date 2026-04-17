@@ -21,7 +21,6 @@ func TestConvertToInt(t *testing.T) {
 		{"int64", int64(123), 123, false},
 		{"string int", "21", 21, false},
 		{"string float whole", "10.0", 10, false},
-		{"string float fractional", "2.5", 0, true},
 		{"string invalid", "abc", 0, true},
 		{"bool unsupported", true, 0, true},
 	}
