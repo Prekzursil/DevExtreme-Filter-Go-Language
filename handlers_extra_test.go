@@ -75,6 +75,26 @@ func TestHandleDynamicFilter_FilterError(t *testing.T) {
 	}
 }
 
+func TestParseDynamicTablePath_InvalidName(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables/..%2fetc%2fpasswd/schema", nil)
+	w := httptest.NewRecorder()
+	_, _, ok := parseDynamicTablePath(w, req)
+	if ok {
+		t.Error("expected parseDynamicTablePath to reject invalid name")
+	}
+}
+
+func TestHandleDynamicSchema_NotExistError(t *testing.T) {
+	defer withDynamicTables(t)()
+
+	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables/nosuchname/schema", nil)
+	w := httptest.NewRecorder()
+	dynamicTableHandler(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
 func TestHandleDynamicFilter_MissingData(t *testing.T) {
 	defer withDynamicTables(t)()
 
