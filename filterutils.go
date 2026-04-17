@@ -40,79 +40,78 @@ func GetAdapter(entityName string) (EntityAdapter, error) {
 
 // ParseFilterToPredicates converts a DevExtreme filter object into an *sql.Predicate
 // using the provided adapter for entity-specific logic.
-func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (PredicateFunc, error) { // Returns *sql.Predicate
+func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (PredicateFunc, error) {
 	if adapter == nil {
 		return nil, fmt.Errorf("entity adapter cannot be nil")
 	}
 	if filterInput == nil {
 		return nil, nil
 	}
-
 	filterArray, ok := filterInput.([]interface{})
 	if !ok {
 		return nil, fmt.Errorf("filter input is not an array, got %T", filterInput)
 	}
-
 	if len(filterArray) == 0 {
 		return nil, nil
 	}
-
-	// Handle unary NOT: ["!", [condition]]
-	if s, ok := filterArray[0].(string); ok && s == "!" {
-		if len(filterArray) != 2 {
-			return nil, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d. Filter: %+v", len(filterArray), filterArray)
-		}
-		subPredicate, err := ParseFilterToPredicates(adapter, filterArray[1])
-		if err != nil {
-			return nil, fmt.Errorf("error parsing NOT sub-condition: %w. Sub-filter: %+v", err, filterArray[1])
-		}
-		if subPredicate == nil {
-			return nil, nil
-		}
-		return adapter.GetNotPredicate(subPredicate), nil
+	if isNotFilter(filterArray) {
+		return parseNotFilter(adapter, filterArray)
 	}
-
-	// Handle simple condition: ["field", "operator", "value"]
-	if fieldName, ok := filterArray[0].(string); ok && len(filterArray) == 3 {
-		opCandidate := strings.ToLower(fieldName)
-		// Ensure fieldName itself isn't a logical operator, which can happen in malformed filters like ["and", "=", true]
-		if opCandidate != "and" && opCandidate != "or" && opCandidate != "!" {
-			operator, okOp := filterArray[1].(string)
-			if !okOp {
-				return nil, fmt.Errorf("operator in simple condition must be a string, got %T", filterArray[1])
-			}
-			value := filterArray[2]
-			return adapter.GetPredicateForField(fieldName, operator, value)
-		}
+	if simple, ok := trySimpleCondition(filterArray); ok {
+		return adapter.GetPredicateForField(simple.field, simple.op, simple.value)
 	}
+	return parseGroupFilter(adapter, filterArray)
+}
 
-	// Handle group condition: [condition1, "and"|"or", condition2, ...]
-	var predicates []PredicateFunc
-	var ops []string
+func isNotFilter(filterArray []interface{}) bool {
+	s, ok := filterArray[0].(string)
+	return ok && s == "!"
+}
 
-	// Collect all conditions and operators
-	for i, item := range filterArray {
-		if i%2 == 0 { // Condition
-			p, err := ParseFilterToPredicates(adapter, item)
-			if err != nil {
-				return nil, fmt.Errorf("error parsing sub-condition in group: %w. Item: %+v", err, item)
-			}
-			if p != nil { // Only add non-nil predicates
-				predicates = append(predicates, p)
-			}
-		} else { // Operator
-			opStr, ok := item.(string)
-			if !ok {
-				return nil, fmt.Errorf("logical operator in group must be a string, got %T: '%v'", item, item)
-			}
-			opStrLower := strings.ToLower(opStr)
-			if opStrLower != "and" && opStrLower != "or" {
-				return nil, fmt.Errorf("invalid logical operator in group: '%s'", opStr)
-			}
-			ops = append(ops, opStrLower)
-		}
+func parseNotFilter(adapter EntityAdapter, filterArray []interface{}) (PredicateFunc, error) {
+	if len(filterArray) != 2 {
+		return nil, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d", len(filterArray))
 	}
+	subPredicate, err := ParseFilterToPredicates(adapter, filterArray[1])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing NOT sub-condition: %w", err)
+	}
+	if subPredicate == nil {
+		return nil, nil
+	}
+	return adapter.GetNotPredicate(subPredicate), nil
+}
 
+type simpleCondition struct {
+	field string
+	op    string
+	value interface{}
+}
+
+func trySimpleCondition(filterArray []interface{}) (simpleCondition, bool) {
+	if len(filterArray) != 3 {
+		return simpleCondition{}, false
+	}
+	fieldName, ok := filterArray[0].(string)
+	if !ok {
+		return simpleCondition{}, false
+	}
+	lowered := strings.ToLower(fieldName)
+	if lowered == "and" || lowered == "or" || lowered == "!" {
+		return simpleCondition{}, false
+	}
+	operator, ok := filterArray[1].(string)
+	if !ok {
+		return simpleCondition{}, false
+	}
+	return simpleCondition{field: fieldName, op: operator, value: filterArray[2]}, true
+}
+
+func parseGroupFilter(adapter EntityAdapter, filterArray []interface{}) (PredicateFunc, error) {
+	predicates, ops, err := collectGroupParts(adapter, filterArray)
+	if err != nil {
+		return nil, err
+	}
 	if len(predicates) == 0 {
 		return nil, nil
 	}
@@ -122,30 +121,47 @@ func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (Pr
 	if len(ops) != len(predicates)-1 {
 		return nil, fmt.Errorf("mismatched number of conditions and operators in group. Conditions: %d, Ops: %d", len(predicates), len(ops))
 	}
+	return combineGroupParts(adapter, predicates, ops), nil
+}
 
-	// Combine based on operators - simplified left-to-right evaluation for now
-	// For proper precedence, a more complex shunting-yard or recursive descent parser would be needed.
-	// This simplified version assumes DevExtreme usually provides a flat list or correctly parenthesized groups.
-	// Example: [C1, "and", C2, "or", C3] -> (C1 and C2) or C3
-
-	// For now, let's assume the adapter's And/Or can handle multiple inputs,
-	// or we apply them sequentially. DevExtreme often groups like [ [C1, "and", C2], "or", C3 ].
-	// The recursive nature of ParseFilterToPredicates should handle the nesting.
-	// The loop below is for a flat list of conditions and operators at the current level.
-
-	currentPredicate := predicates[0]
-	for i, op := range ops {
-		if i+1 >= len(predicates) { // Should not happen if previous check passed
-			return nil, fmt.Errorf("internal error: not enough predicates for operators")
+func collectGroupParts(adapter EntityAdapter, filterArray []interface{}) ([]PredicateFunc, []string, error) {
+	var predicates []PredicateFunc
+	var ops []string
+	for i, item := range filterArray {
+		if i%2 == 0 {
+			p, err := ParseFilterToPredicates(adapter, item)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error parsing sub-condition in group: %w", err)
+			}
+			if p != nil {
+				predicates = append(predicates, p)
+			}
+			continue
 		}
-		nextPredicate := predicates[i+1]
-		if op == "and" {
-			currentPredicate = adapter.GetAndPredicate(currentPredicate, nextPredicate)
-		} else { // "or"
-			currentPredicate = adapter.GetOrPredicate(currentPredicate, nextPredicate)
+		opStr, ok := item.(string)
+		if !ok {
+			return nil, nil, fmt.Errorf("logical operator in group must be a string, got %T: '%v'", item, item)
 		}
+		opLower := strings.ToLower(opStr)
+		if opLower != "and" && opLower != "or" {
+			return nil, nil, fmt.Errorf("invalid logical operator in group: '%s'", opStr)
+		}
+		ops = append(ops, opLower)
 	}
-	return currentPredicate, nil
+	return predicates, ops, nil
+}
+
+func combineGroupParts(adapter EntityAdapter, predicates []PredicateFunc, ops []string) PredicateFunc {
+	current := predicates[0]
+	for i, op := range ops {
+		next := predicates[i+1]
+		if op == "and" {
+			current = adapter.GetAndPredicate(current, next)
+			continue
+		}
+		current = adapter.GetOrPredicate(current, next)
+	}
+	return current
 }
 
 // Helper to convert to int (from float64 which JSON unmarshals numbers to, or string)

@@ -128,99 +128,134 @@ func generateTest3SchemaData(count int, ctx context.Context) {
 	log.Printf("Generated %d Test3Schema records", count)
 }
 
+type filterRequest struct {
+	Entity string      `json:"entity"`
+	Filter interface{} `json:"filter"`
+}
+
 func filterHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Backend: filterHandler received a request")
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	var requestBody struct {
-		Entity string      `json:"entity"`
-		Filter interface{} `json:"filter"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&requestBody); err != nil {
-		log.Printf("Backend: Error decoding request body: %v", err)
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	req, ok := decodeFilterRequest(w, r)
+	if !ok {
 		return
 	}
-	if requestBody.Entity == "" {
-		log.Printf("Backend: Missing 'entity' field in request body")
-		http.Error(w, "Missing 'entity' field in request body", http.StatusBadRequest)
+	adapter, ok := resolveAdapter(w, req.Entity)
+	if !ok {
 		return
 	}
-	log.Printf("Backend: Decoded request for entity '%s', filter: %+v", requestBody.Entity, requestBody.Filter)
-	adapter, err := GetAdapter(requestBody.Entity)
+	predicate, err := ParseFilterToPredicates(adapter, req.Filter)
 	if err != nil {
-		log.Printf("Backend: Failed to get adapter for entity '%s': %v", requestBody.Entity, err)
-		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", requestBody.Entity), http.StatusBadRequest)
-		return
-	}
-	finalPredicateAsSqlP, err := ParseFilterToPredicates(adapter, requestBody.Filter)
-	if err != nil {
-		log.Printf("Backend: Error parsing filter for entity '%s': %v", requestBody.Entity, err)
+		log.Printf("Backend: Error parsing filter for entity '%s': %v", req.Entity, err)
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
 		return
 	}
-
-	var results interface{}
-	var queryError error
-	ctx := context.Background()
-
-	applyPred := func(s *sql.Selector) {
-		if finalPredicateAsSqlP != nil {
-			s.Where(finalPredicateAsSqlP)
+	results, err := runEntityQuery(context.Background(), req.Entity, predicate)
+	if err != nil {
+		log.Printf("Backend: Error executing query for entity '%s': %v", req.Entity, err)
+		status := http.StatusInternalServerError
+		if errors.Is(err, errUnsupportedEntity) {
+			status = http.StatusBadRequest
 		}
-	}
-
-	switch strings.ToLower(requestBody.Entity) {
-	case "transaction":
-		query := client.Transaction.Query()
-		if finalPredicateAsSqlP != nil {
-			query = query.Where(applyPred)
-		}
-		dbResults, errDb := query.All(ctx)
-		queryError = errDb
-		if errDb == nil {
-			dtoResults := make([]Transaction, len(dbResults))
-			for i, trx := range dbResults {
-				dtoResults[i] = Transaction{
-					ID: trx.ID, Date: trx.Date, Amount: trx.Amount, Name: trx.Name,
-					Location: trx.Location, Category: trx.Category, Type: trx.Type,
-				}
-			}
-			results = dtoResults
-		}
-	case "test1schema":
-		query := client.Test1Schema.Query()
-		if finalPredicateAsSqlP != nil {
-			query = query.Where(applyPred)
-		}
-		results, queryError = query.All(ctx)
-	case "test2schema":
-		query := client.Test2Schema.Query()
-		if finalPredicateAsSqlP != nil {
-			query = query.Where(applyPred)
-		}
-		results, queryError = query.All(ctx)
-	case "test3schema":
-		query := client.Test3Schema.Query()
-		if finalPredicateAsSqlP != nil {
-			query = query.Where(applyPred)
-		}
-		results, queryError = query.All(ctx)
-	default:
-		log.Printf("Backend: Unsupported entity type for filtering: %s", requestBody.Entity)
-		http.Error(w, fmt.Sprintf("Unsupported entity type: %s", requestBody.Entity), http.StatusBadRequest)
-		return
-	}
-	if queryError != nil {
-		log.Printf("Backend: Error executing query for entity '%s': %v", requestBody.Entity, queryError)
-		http.Error(w, fmt.Sprintf("Error executing query: %v", queryError), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error executing query: %v", err), status)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
+}
+
+func decodeFilterRequest(w http.ResponseWriter, r *http.Request) (*filterRequest, bool) {
+	var req filterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Printf("Backend: Error decoding request body: %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return nil, false
+	}
+	if req.Entity == "" {
+		log.Print("Backend: Missing 'entity' field in request body")
+		http.Error(w, "Missing 'entity' field in request body", http.StatusBadRequest)
+		return nil, false
+	}
+	log.Printf("Backend: Decoded request for entity '%s'", req.Entity)
+	return &req, true
+}
+
+func resolveAdapter(w http.ResponseWriter, entity string) (EntityAdapter, bool) {
+	adapter, err := GetAdapter(entity)
+	if err != nil {
+		log.Printf("Backend: Failed to get adapter for entity '%s': %v", entity, err)
+		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", entity), http.StatusBadRequest)
+		return nil, false
+	}
+	return adapter, true
+}
+
+var errUnsupportedEntity = fmt.Errorf("unsupported entity type")
+
+func runEntityQuery(ctx context.Context, entity string, predicate PredicateFunc) (interface{}, error) {
+	apply := func(s *sql.Selector) {
+		if predicate != nil {
+			s.Where(predicate)
+		}
+	}
+	switch strings.ToLower(entity) {
+	case "transaction":
+		return queryTransactions(ctx, predicate, apply)
+	case "test1schema":
+		return queryTest1Schema(ctx, predicate, apply)
+	case "test2schema":
+		return queryTest2Schema(ctx, predicate, apply)
+	case "test3schema":
+		return queryTest3Schema(ctx, predicate, apply)
+	}
+	log.Printf("Backend: Unsupported entity type for filtering: %s", entity)
+	return nil, fmt.Errorf("%w: %s", errUnsupportedEntity, entity)
+}
+
+func queryTransactions(ctx context.Context, predicate PredicateFunc, apply func(*sql.Selector)) (interface{}, error) {
+	query := client.Transaction.Query()
+	if predicate != nil {
+		query = query.Where(apply)
+	}
+	rows, err := query.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto := make([]Transaction, len(rows))
+	for i, trx := range rows {
+		dto[i] = Transaction{
+			ID: trx.ID, Date: trx.Date, Amount: trx.Amount, Name: trx.Name,
+			Location: trx.Location, Category: trx.Category, Type: trx.Type,
+		}
+	}
+	return dto, nil
+}
+
+func queryTest1Schema(ctx context.Context, predicate PredicateFunc, apply func(*sql.Selector)) (interface{}, error) {
+	query := client.Test1Schema.Query()
+	if predicate != nil {
+		query = query.Where(apply)
+	}
+	return query.All(ctx)
+}
+
+func queryTest2Schema(ctx context.Context, predicate PredicateFunc, apply func(*sql.Selector)) (interface{}, error) {
+	query := client.Test2Schema.Query()
+	if predicate != nil {
+		query = query.Where(apply)
+	}
+	return query.All(ctx)
+}
+
+func queryTest3Schema(ctx context.Context, predicate PredicateFunc, apply func(*sql.Selector)) (interface{}, error) {
+	query := client.Test3Schema.Query()
+	if predicate != nil {
+		query = query.Where(apply)
+	}
+	return query.All(ctx)
 }
 
 func schemaEditorHandler(w http.ResponseWriter, r *http.Request) {

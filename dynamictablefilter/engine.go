@@ -102,135 +102,153 @@ func ListDynamicTables() ([]string, error) {
 	return tableNames, nil
 }
 
+var timeLayouts = []string{
+	time.RFC3339Nano,
+	"2006-01-02T15:04:05Z",
+	"2006-01-02T15:04:05",
+	"2006-01-02",
+}
+
+func parseTimeAnyLayout(s string) (time.Time, bool) {
+	for _, layout := range timeLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func coerceToFloat64(val interface{}) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	}
+	if s, ok := val.(string); ok {
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f, true
+		}
+	}
+	if f, err := strconv.ParseFloat(fmt.Sprintf("%v", val), 64); err == nil {
+		return f, true
+	}
+	return 0, false
+}
+
+func evalStringOp(recordVal, filterVal interface{}, op string) bool {
+	r := strings.ToLower(fmt.Sprintf("%v", recordVal))
+	f := strings.ToLower(fmt.Sprintf("%v", filterVal))
+	switch op {
+	case "=":
+		return r == f
+	case "<>":
+		return r != f
+	case "contains":
+		return strings.Contains(r, f)
+	case "startswith":
+		return strings.HasPrefix(r, f)
+	case "endswith":
+		return strings.HasSuffix(r, f)
+	case "notcontains":
+		return !strings.Contains(r, f)
+	}
+	return false
+}
+
+func evalNumericOp(r, f float64, op string) bool {
+	switch op {
+	case "=":
+		return r == f
+	case "<>":
+		return r != f
+	case ">":
+		return r > f
+	case ">=":
+		return r >= f
+	case "<":
+		return r < f
+	case "<=":
+		return r <= f
+	}
+	return false
+}
+
+func evalIntOp(recordVal, filterVal interface{}, op string) bool {
+	r, okR := coerceToFloat64(recordVal)
+	f, okF := coerceToFloat64(filterVal)
+	if !okR || !okF {
+		return false
+	}
+	return evalNumericOp(float64(int(r)), float64(int(f)), op)
+}
+
+func evalFloatOp(recordVal, filterVal interface{}, op string) bool {
+	r, okR := recordVal.(float64)
+	if !okR {
+		return false
+	}
+	f, okF := coerceToFloat64(filterVal)
+	if !okF {
+		return false
+	}
+	return evalNumericOp(r, f, op)
+}
+
+func evalBoolOp(recordVal, filterVal interface{}, op string) bool {
+	r, okR := recordVal.(bool)
+	if !okR {
+		return false
+	}
+	f, errF := strconv.ParseBool(strings.ToLower(fmt.Sprintf("%v", filterVal)))
+	if errF != nil {
+		return false
+	}
+	switch op {
+	case "=":
+		return r == f
+	case "<>":
+		return r != f
+	}
+	return false
+}
+
+func evalTimeOp(recordVal, filterVal interface{}, op string) bool {
+	r, okR := parseTimeAnyLayout(fmt.Sprintf("%v", recordVal))
+	f, okF := parseTimeAnyLayout(fmt.Sprintf("%v", filterVal))
+	if !okR || !okF {
+		return false
+	}
+	switch op {
+	case "=":
+		return r.Equal(f)
+	case "<>":
+		return !r.Equal(f)
+	case ">":
+		return r.After(f)
+	case ">=":
+		return !r.Before(f)
+	case "<":
+		return r.Before(f)
+	case "<=":
+		return !r.After(f)
+	}
+	return false
+}
+
 func evaluateCondition(recordVal interface{}, op string, filterVal interface{}, fieldType string) bool {
 	op = strings.ToLower(op)
 	switch fieldType {
 	case "string":
-		sRecordVal := fmt.Sprintf("%v", recordVal)
-		sFilterVal := fmt.Sprintf("%v", filterVal)
-		switch op {
-		case "=":
-			return strings.EqualFold(sRecordVal, sFilterVal)
-		case "<>":
-			return !strings.EqualFold(sRecordVal, sFilterVal)
-		case "contains":
-			return strings.Contains(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "startswith":
-			return strings.HasPrefix(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "endswith":
-			return strings.HasSuffix(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "notcontains":
-			return !strings.Contains(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		}
+		return evalStringOp(recordVal, filterVal, op)
 	case "int":
-		iRecordVal, okR := recordVal.(float64)
-		if !okR {
-			if rv, okInt := recordVal.(int); okInt {
-				iRecordVal = float64(rv)
-			} else {
-				return false
-			}
-		}
-		iFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return int(iRecordVal) == int(iFilterVal)
-		case "<>":
-			return int(iRecordVal) != int(iFilterVal)
-		case ">":
-			return int(iRecordVal) > int(iFilterVal)
-		case ">=":
-			return int(iRecordVal) >= int(iFilterVal)
-		case "<":
-			return int(iRecordVal) < int(iFilterVal)
-		case "<=":
-			return int(iRecordVal) <= int(iFilterVal)
-		}
+		return evalIntOp(recordVal, filterVal, op)
 	case "float64":
-		fRecordVal, okR := recordVal.(float64)
-		if !okR {
-			return false
-		}
-		fFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return fRecordVal == fFilterVal
-		case "<>":
-			return fRecordVal != fFilterVal
-		case ">":
-			return fRecordVal > fFilterVal
-		case ">=":
-			return fRecordVal >= fFilterVal
-		case "<":
-			return fRecordVal < fFilterVal
-		case "<=":
-			return fRecordVal <= fFilterVal
-		}
+		return evalFloatOp(recordVal, filterVal, op)
 	case "bool":
-		bRecordVal, okR := recordVal.(bool)
-		if !okR {
-			return false
-		}
-		bFilterVal, errF := strconv.ParseBool(strings.ToLower(fmt.Sprintf("%v", filterVal)))
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return bRecordVal == bFilterVal
-		case "<>":
-			return bRecordVal != bFilterVal
-		}
+		return evalBoolOp(recordVal, filterVal, op)
 	case "time.Time":
-		sRecordVal := fmt.Sprintf("%v", recordVal)
-		sFilterVal := fmt.Sprintf("%v", filterVal)
-		layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05Z", "2006-01-02T15:04:05", "2006-01-02"}
-		var tRecordVal, tFilterVal time.Time
-		var errR, errF error
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, sRecordVal); err == nil {
-				tRecordVal = t
-				errR = nil
-				break
-			} else {
-				errR = err
-			}
-		}
-		if errR != nil {
-			return false
-		}
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, sFilterVal); err == nil {
-				tFilterVal = t
-				errF = nil
-				break
-			} else {
-				errF = err
-			}
-		}
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return tRecordVal.Equal(tFilterVal)
-		case "<>":
-			return !tRecordVal.Equal(tFilterVal)
-		case ">":
-			return tRecordVal.After(tFilterVal)
-		case ">=":
-			return tRecordVal.After(tFilterVal) || tRecordVal.Equal(tFilterVal)
-		case "<":
-			return tRecordVal.Before(tFilterVal)
-		case "<=":
-			return tRecordVal.Before(tFilterVal) || tRecordVal.Equal(tFilterVal)
-		}
+		return evalTimeOp(recordVal, filterVal, op)
 	}
 	return false
 }
@@ -240,63 +258,93 @@ func applyFilterRecursive(record map[string]interface{}, schema *TableSchema, fi
 		return true, nil
 	}
 	if s, ok := filterGroup[0].(string); ok && s == "!" {
-		if len(filterGroup) != 2 {
-			return false, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d", len(filterGroup))
-		}
-		subFilterGroup, okCast := filterGroup[1].([]interface{})
-		if !okCast {
-			return false, fmt.Errorf("NOT filter operand must be an array, got %T", filterGroup[1])
-		}
-		subMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
-		if err != nil {
-			return false, err
-		}
-		return !subMatch, nil
+		return applyNotFilter(record, schema, filterGroup)
 	}
-	if _, ok := filterGroup[0].(string); ok && len(filterGroup) == 3 {
-		fieldName, _ := filterGroup[0].(string)
-		operator, _ := filterGroup[1].(string)
-		value := filterGroup[2]
-		fieldSchema, fieldExists := schema.FieldMap[strings.ToLower(fieldName)] // Use exported
-		if !fieldExists {
-			return false, fmt.Errorf("field '%s' not found in schema for dynamic table", fieldName)
-		}
-		recordVal, recordValExists := record[fieldName]
-		if !recordValExists {
-			return false, nil
-		}
-		return evaluateCondition(recordVal, operator, value, fieldSchema.Type), nil
+	if isSimpleFilter(filterGroup) {
+		return applySimpleFilter(record, schema, filterGroup)
 	}
-	currentMatch, err := applyFilterRecursive(record, schema, filterGroup[0].([]interface{}))
+	return applyGroupFilter(record, schema, filterGroup)
+}
+
+func applyNotFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	if len(filterGroup) != 2 {
+		return false, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d", len(filterGroup))
+	}
+	sub, ok := filterGroup[1].([]interface{})
+	if !ok {
+		return false, fmt.Errorf("NOT filter operand must be an array, got %T", filterGroup[1])
+	}
+	match, err := applyFilterRecursive(record, schema, sub)
+	if err != nil {
+		return false, err
+	}
+	return !match, nil
+}
+
+func isSimpleFilter(filterGroup []interface{}) bool {
+	if len(filterGroup) != 3 {
+		return false
+	}
+	_, ok := filterGroup[0].(string)
+	return ok
+}
+
+func applySimpleFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	fieldName, _ := filterGroup[0].(string)
+	operator, _ := filterGroup[1].(string)
+	fieldSchema, exists := schema.FieldMap[strings.ToLower(fieldName)]
+	if !exists {
+		return false, fmt.Errorf("field '%s' not found in schema for dynamic table", fieldName)
+	}
+	recordVal, found := record[fieldName]
+	if !found {
+		return false, nil
+	}
+	return evaluateCondition(recordVal, operator, filterGroup[2], fieldSchema.Type), nil
+}
+
+func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	first, ok := filterGroup[0].([]interface{})
+	if !ok {
+		return false, fmt.Errorf("group filter first element must be a sub-group, got %T", filterGroup[0])
+	}
+	current, err := applyFilterRecursive(record, schema, first)
 	if err != nil {
 		return false, err
 	}
 	for i := 1; i < len(filterGroup); i += 2 {
-		if i+1 >= len(filterGroup) {
-			return false, fmt.Errorf("malformed group filter: missing condition after operator")
-		}
-		logicalOperatorStr, ok := filterGroup[i].(string)
-		if !ok {
-			return false, fmt.Errorf("logical operator must be a string, got %T", filterGroup[i])
-		}
-		logicalOperator := strings.ToLower(logicalOperatorStr)
-		subFilterGroup, okCast := filterGroup[i+1].([]interface{})
-		if !okCast {
-			return false, fmt.Errorf("group filter operand must be an array, got %T", filterGroup[i+1])
-		}
-		nextSubMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
+		next, err := applyGroupStep(record, schema, filterGroup, i, current)
 		if err != nil {
 			return false, err
 		}
-		if logicalOperator == "and" {
-			currentMatch = currentMatch && nextSubMatch
-		} else if logicalOperator == "or" {
-			currentMatch = currentMatch || nextSubMatch
-		} else {
-			return false, fmt.Errorf("invalid logical operator: '%s'", logicalOperatorStr)
-		}
+		current = next
 	}
-	return currentMatch, nil
+	return current, nil
+}
+
+func applyGroupStep(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}, i int, current bool) (bool, error) {
+	if i+1 >= len(filterGroup) {
+		return false, fmt.Errorf("malformed group filter: missing condition after operator")
+	}
+	opStr, ok := filterGroup[i].(string)
+	if !ok {
+		return false, fmt.Errorf("logical operator must be a string, got %T", filterGroup[i])
+	}
+	sub, ok := filterGroup[i+1].([]interface{})
+	if !ok {
+		return false, fmt.Errorf("group filter operand must be an array, got %T", filterGroup[i+1])
+	}
+	match, err := applyFilterRecursive(record, schema, sub)
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(opStr) {
+	case "and":
+		return current && match, nil
+	case "or":
+		return current || match, nil
+	}
+	return false, fmt.Errorf("invalid logical operator: '%s'", opStr)
 }
 
 func FilterDynamicData(data []map[string]interface{}, schema *TableSchema, filterInput interface{}) ([]map[string]interface{}, error) {

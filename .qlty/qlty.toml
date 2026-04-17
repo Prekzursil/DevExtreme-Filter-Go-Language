@@ -22,3 +22,7 @@ default = true
 
 [smells]
 mode = "block"
+
+[[plugin]]
+name = "radarlint-go"
+mode = "monitor"

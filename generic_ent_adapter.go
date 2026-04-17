@@ -91,141 +91,192 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 	}
 
 	opLower := strings.ToLower(op)
-
 	if opLower == "between" {
-		valueSlice, ok := val.([]interface{})
-		if !ok || len(valueSlice) != 2 {
-			return nil, fmt.Errorf("operator 'between' requires an array of two values, got %T for field %s", val, field)
-		}
-
-		switch fieldSchema.Type {
-		case "int":
-			log.Printf("DEBUG: 'between' int, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' int, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
-			lower, errL := convertToInt(valueSlice[0])
-			if errL != nil {
-				return nil, fmt.Errorf("invalid lower bound for 'between' on int field %s: %w", field, errL)
-			}
-			upper, errU := convertToInt(valueSlice[1])
-			if errU != nil {
-				return nil, fmt.Errorf("invalid upper bound for 'between' on int field %s: %w", field, errU)
-			}
-			return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-		case "float64":
-			log.Printf("DEBUG: 'between' float64, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' float64, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
-			lower, errL := convertToFloat64(valueSlice[0])
-			if errL != nil {
-				return nil, fmt.Errorf("invalid lower bound for 'between' on float field %s: %w", field, errL)
-			}
-			upper, errU := convertToFloat64(valueSlice[1])
-			if errU != nil {
-				return nil, fmt.Errorf("invalid upper bound for 'between' on float field %s: %w", field, errU)
-			}
-			return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-		case "time.Time":
-			log.Printf("DEBUG: 'between' time.Time, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' time.Time, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
-			lower, errL := convertToTime(valueSlice[0])
-			if errL != nil {
-				return nil, fmt.Errorf("invalid lower bound for 'between' on time field %s: %w", field, errL)
-			}
-			upper, errU := convertToTime(valueSlice[1])
-			if errU != nil {
-				return nil, fmt.Errorf("invalid upper bound for 'between' on time field %s: %w", field, errU)
-			}
-			return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-		default:
-			return nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldSchema.Type, field)
-		}
+		return buildBetweenPredicate(columnName, field, fieldSchema.Type, val)
 	}
+	return buildScalarPredicate(columnName, field, fieldSchema.Type, opLower, op, val)
+}
 
-	// Handle other operators
-	switch fieldSchema.Type {
-	case "string", "text":
-		strVal, ok := val.(string)
-		if !ok {
-			return nil, fmt.Errorf("value for string field %s must be a string", field)
-		}
-		if handler, found := stringOperators[opLower]; found {
-			return handler(columnName, strVal)
-		}
+func buildBetweenPredicate(columnName, field, fieldType string, val interface{}) (PredicateFunc, error) {
+	bounds, ok := val.([]interface{})
+	if !ok || len(bounds) != 2 {
+		return nil, fmt.Errorf("operator 'between' requires an array of two values, got %T for field %s", val, field)
+	}
+	switch fieldType {
 	case "int":
-		intVal, err := convertToInt(val)
+		lower, upper, err := betweenInts(bounds, field)
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for int field %s: %w", field, err)
+			return nil, err
 		}
-		if handler, found := intOperators[opLower]; found {
-			return handler(columnName, intVal)
-		}
+		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 	case "float64":
-		floatVal, err := convertToFloat64(val)
+		lower, upper, err := betweenFloats(bounds, field)
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for float field %s: %w", field, err)
+			return nil, err
 		}
-		if handler, found := floatOperators[opLower]; found {
-			return handler(columnName, floatVal)
-		}
-	case "bool":
-		boolVal, okConv := val.(bool)
-		if !okConv {
-			if strVal, okStr := val.(string); okStr {
-				parsed, err := strconv.ParseBool(strings.ToLower(strVal))
-				if err != nil {
-					return nil, fmt.Errorf("invalid value for bool field %s: expected bool or 'true'/'false'", field)
-				}
-				boolVal = parsed
-			} else {
-				return nil, fmt.Errorf("value for bool field %s must be a boolean or string 'true'/'false'", field)
-			}
-		}
-		if handler, found := boolOperators[opLower]; found {
-			return handler(columnName, boolVal)
-		}
+		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 	case "time.Time":
-		timeVal, err := convertToTime(val)
+		lower, upper, err := betweenTimes(bounds, field)
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for time field %s: %w", field, err)
+			return nil, err
 		}
-		if handler, found := timeOperators[opLower]; found {
-			return handler(columnName, timeVal)
-		}
+		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 	default:
-		return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldSchema.Type, field)
+		return nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldType, field)
 	}
-	return nil, fmt.Errorf("unsupported operator '%s' for field type %s of field %s", op, fieldSchema.Type, field)
+}
+
+func betweenInts(bounds []interface{}, field string) (int, int, error) {
+	log.Printf("DEBUG: 'between' int, bounds[0]=%T, bounds[1]=%T", bounds[0], bounds[1])
+	lower, err := convertToInt(bounds[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid lower bound for 'between' on int field %s: %w", field, err)
+	}
+	upper, err := convertToInt(bounds[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid upper bound for 'between' on int field %s: %w", field, err)
+	}
+	return lower, upper, nil
+}
+
+func betweenFloats(bounds []interface{}, field string) (float64, float64, error) {
+	log.Printf("DEBUG: 'between' float64, bounds[0]=%T, bounds[1]=%T", bounds[0], bounds[1])
+	lower, err := convertToFloat64(bounds[0])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid lower bound for 'between' on float field %s: %w", field, err)
+	}
+	upper, err := convertToFloat64(bounds[1])
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid upper bound for 'between' on float field %s: %w", field, err)
+	}
+	return lower, upper, nil
+}
+
+func betweenTimes(bounds []interface{}, field string) (time.Time, time.Time, error) {
+	log.Printf("DEBUG: 'between' time.Time, bounds[0]=%T, bounds[1]=%T", bounds[0], bounds[1])
+	lower, err := convertToTime(bounds[0])
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid lower bound for 'between' on time field %s: %w", field, err)
+	}
+	upper, err := convertToTime(bounds[1])
+	if err != nil {
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid upper bound for 'between' on time field %s: %w", field, err)
+	}
+	return lower, upper, nil
+}
+
+func buildScalarPredicate(columnName, field, fieldType, opLower, opRaw string, val interface{}) (PredicateFunc, error) {
+	switch fieldType {
+	case "string", "text":
+		return scalarString(columnName, field, opLower, val)
+	case "int":
+		return scalarInt(columnName, field, opLower, val)
+	case "float64":
+		return scalarFloat(columnName, field, opLower, val)
+	case "bool":
+		return scalarBool(columnName, field, opLower, val)
+	case "time.Time":
+		return scalarTime(columnName, field, opLower, val)
+	}
+	return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldType, field)
+}
+
+func scalarString(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
+	strVal, ok := val.(string)
+	if !ok {
+		return nil, fmt.Errorf("value for string field %s must be a string", field)
+	}
+	handler, found := stringOperators[opLower]
+	if !found {
+		return nil, fmt.Errorf("unsupported operator '%s' for string field %s", opLower, field)
+	}
+	return handler(columnName, strVal)
+}
+
+func scalarInt(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
+	intVal, err := convertToInt(val)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value for int field %s: %w", field, err)
+	}
+	handler, found := intOperators[opLower]
+	if !found {
+		return nil, fmt.Errorf("unsupported operator '%s' for int field %s", opLower, field)
+	}
+	return handler(columnName, intVal)
+}
+
+func scalarFloat(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
+	floatVal, err := convertToFloat64(val)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value for float field %s: %w", field, err)
+	}
+	handler, found := floatOperators[opLower]
+	if !found {
+		return nil, fmt.Errorf("unsupported operator '%s' for float field %s", opLower, field)
+	}
+	return handler(columnName, floatVal)
+}
+
+func scalarBool(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
+	boolVal, err := coerceToBool(val, field)
+	if err != nil {
+		return nil, err
+	}
+	handler, found := boolOperators[opLower]
+	if !found {
+		return nil, fmt.Errorf("unsupported operator '%s' for bool field %s", opLower, field)
+	}
+	return handler(columnName, boolVal)
+}
+
+func scalarTime(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
+	timeVal, err := convertToTime(val)
+	if err != nil {
+		return nil, fmt.Errorf("invalid value for time field %s: %w", field, err)
+	}
+	handler, found := timeOperators[opLower]
+	if !found {
+		return nil, fmt.Errorf("unsupported operator '%s' for time field %s", opLower, field)
+	}
+	return handler(columnName, timeVal)
+}
+
+func coerceToBool(val interface{}, field string) (bool, error) {
+	if b, ok := val.(bool); ok {
+		return b, nil
+	}
+	if s, ok := val.(string); ok {
+		parsed, err := strconv.ParseBool(strings.ToLower(s))
+		if err != nil {
+			return false, fmt.Errorf("invalid value for bool field %s: expected bool or 'true'/'false'", field)
+		}
+		return parsed, nil
+	}
+	return false, fmt.Errorf("value for bool field %s must be a boolean or string 'true'/'false'", field)
+}
+
+func reducePredicates(predicates []PredicateFunc, combine func(...*sql.Predicate) *sql.Predicate) PredicateFunc {
+	valid := make([]*sql.Predicate, 0, len(predicates))
+	for _, p := range predicates {
+		if p != nil {
+			valid = append(valid, p)
+		}
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+	if len(valid) == 1 {
+		return valid[0]
+	}
+	return combine(valid...)
 }
 
 func (ga *GenericEntAdapter) GetAndPredicate(predicates ...PredicateFunc) PredicateFunc {
-	validPreds := make([]*sql.Predicate, 0, len(predicates))
-	for _, p := range predicates {
-		if p != nil {
-			validPreds = append(validPreds, p)
-		}
-	}
-	if len(validPreds) == 0 {
-		return nil
-	}
-	if len(validPreds) == 1 {
-		return validPreds[0]
-	}
-	return sql.And(validPreds...)
+	return reducePredicates(predicates, sql.And)
 }
 
 func (ga *GenericEntAdapter) GetOrPredicate(predicates ...PredicateFunc) PredicateFunc {
-	validPreds := make([]*sql.Predicate, 0, len(predicates))
-	for _, p := range predicates {
-		if p != nil {
-			validPreds = append(validPreds, p)
-		}
-	}
-	if len(validPreds) == 0 {
-		return nil
-	}
-	if len(validPreds) == 1 {
-		return validPreds[0]
-	}
-	return sql.Or(validPreds...)
+	return reducePredicates(predicates, sql.Or)
 }
 
 func (ga *GenericEntAdapter) GetNotPredicate(p PredicateFunc) PredicateFunc {
