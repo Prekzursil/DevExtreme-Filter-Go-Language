@@ -338,11 +338,19 @@ func setupMux() *http.ServeMux {
 	return mux
 }
 
+// defaultSeedCount determines how many records each seed generator creates
+// when main() bootstraps the server. Exposed as a var so tests can trim it.
+var defaultSeedCount = 100
+
 func seedData(ctx context.Context) {
-	generateTransactions(100, ctx)
-	generateTest1SchemaData(100, ctx)
-	generateTest2SchemaData(100, ctx)
-	generateTest3SchemaData(100, ctx)
+	seedDataN(ctx, defaultSeedCount)
+}
+
+func seedDataN(ctx context.Context, count int) {
+	generateTransactions(count, ctx)
+	generateTest1SchemaData(count, ctx)
+	generateTest2SchemaData(count, ctx)
+	generateTest3SchemaData(count, ctx)
 }
 
 func prepareServer(ctx context.Context) (http.Handler, error) {

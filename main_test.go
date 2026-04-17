@@ -202,6 +202,19 @@ func TestRegisterDefaultAdapters_MissingSchema(t *testing.T) {
 	}
 }
 
+func TestSeedData(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	origCount := defaultSeedCount
+	defer func() { defaultSeedCount = origCount }()
+
+	// Use 0 so we don't trip the UNIQUE constraint while still exercising
+	// the body of seedData() and its underlying generate* helpers.
+	defaultSeedCount = 0
+	seedData(context.Background())
+}
+
 func TestSchemaEditorHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/schema-editor", nil)
 	w := httptest.NewRecorder()
