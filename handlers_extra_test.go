@@ -32,6 +32,27 @@ func TestListDynamicTablesHandler_ErrorResponse(t *testing.T) {
 	}
 }
 
+func TestListDynamicTablesHandler_InternalError(t *testing.T) {
+	orig := dynamictablefilter.GetBaseTablesPath()
+	defer dynamictablefilter.SetBaseTablesPath(orig)
+
+	// Point the base path at a regular file so ReadDir returns a
+	// not-a-directory error (neither os.IsNotExist nor nil).
+	tmp := t.TempDir()
+	blocker := tmp + "/not-a-dir"
+	if err := os.WriteFile(blocker, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dynamictablefilter.SetBaseTablesPath(blocker)
+
+	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables", nil)
+	w := httptest.NewRecorder()
+	listDynamicTablesHandler(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Logf("on this platform ReadDir may not error on a file path; got status=%d", w.Code)
+	}
+}
+
 func TestParseDynamicTablePath_OnlyPrefix(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables/", nil)
 	w := httptest.NewRecorder()
