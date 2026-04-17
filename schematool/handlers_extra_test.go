@@ -83,6 +83,21 @@ func TestGenerateSchemaPayload_Success(t *testing.T) {
 	}
 }
 
+func TestGenerateSchemaPayload_SanitizeErrorViaAdapter(t *testing.T) {
+	// Entity name that sanitizes to empty string (only hyphens/underscores)
+	// makes GenerateGoSchemaCode error out first. Use a name that passes the
+	// schema generator but the adapter generator would reject — in practice
+	// both helpers share the sanitizer, so this primarily covers the schema
+	// error path.
+	_, err := generateSchemaPayload(SchemaRequest{
+		EntityName: "---",
+		Fields:     []SchemaFieldDefinition{{Name: "a", Type: "string"}},
+	})
+	if err == nil {
+		t.Error("expected error for all-hyphen entity name")
+	}
+}
+
 func TestGenerateSchemaPayload_InvalidType(t *testing.T) {
 	_, err := generateSchemaPayload(SchemaRequest{
 		EntityName: "demo",
