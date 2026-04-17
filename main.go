@@ -17,7 +17,7 @@ import (
 	_ "transaction-filter-backend/ent/test2schema"
 	_ "transaction-filter-backend/ent/test3schema"
 
-	"entgo.io/ent/dialect/sql" // Keep this for sql.Selector and potentially sql.P if needed elsewhere
+	"entgo.io/ent/dialect/sql"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/cors"
@@ -155,7 +155,7 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", requestBody.Entity), http.StatusBadRequest)
 		return
 	}
-	finalPredicateAsSqlP, err := ParseFilterToPredicates(adapter, requestBody.Filter) // This now returns *sql.Predicate
+	finalPredicateAsSqlP, err := ParseFilterToPredicates(adapter, requestBody.Filter)
 	if err != nil {
 		log.Printf("Backend: Error parsing filter for entity '%s': %v", requestBody.Entity, err)
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
@@ -166,7 +166,6 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 	var queryError error
 	ctx := context.Background()
 
-	// Helper function to apply the predicate
 	applyPred := func(s *sql.Selector) {
 		if finalPredicateAsSqlP != nil {
 			s.Where(finalPredicateAsSqlP)
@@ -223,6 +222,133 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(results)
 }
 
+func schemaEditorHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "static/schema_editor.html")
+}
+
+func listFilterableEntitiesHandler(w http.ResponseWriter, r *http.Request) {
+	entityNames := make([]string, 0, len(registeredAdapters))
+	for name := range registeredAdapters {
+		entityNames = append(entityNames, name)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(entityNames)
+}
+
+func listDynamicTablesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tables, err := dynamictablefilter.ListDynamicTables()
+	if err != nil {
+		log.Printf("Error listing dynamic tables: %v", err)
+		http.Error(w, "Failed to list dynamic tables", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(tables)
+}
+
+func dynamicTableHandler(w http.ResponseWriter, r *http.Request) {
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/dynamic-tables/"), "/")
+	if len(pathParts) < 1 || pathParts[0] == "" {
+		http.Error(w, "Table name missing", http.StatusBadRequest)
+		return
+	}
+	tableName := pathParts[0]
+	if len(pathParts) == 1 && r.Method == http.MethodGet {
+		http.Error(w, "Specify /schema or /filter endpoint", http.StatusBadRequest)
+		return
+	}
+	if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
+		schema, err := dynamictablefilter.LoadTableSchema(tableName)
+		if err != nil {
+			log.Printf("Error loading schema for dynamic table %s: %v", tableName, err)
+			if os.IsNotExist(err) {
+				http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
+			} else {
+				http.Error(w, "Failed to load schema for table "+tableName, http.StatusInternalServerError)
+			}
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(schema)
+		return
+	}
+	if len(pathParts) == 2 && pathParts[1] == "filter" && r.Method == http.MethodPost {
+		var requestBody struct {
+			Filter interface{} `json:"filter"`
+		}
+		decoder := json.NewDecoder(r.Body)
+		if err := decoder.Decode(&requestBody); err != nil {
+			log.Printf("Error decoding filter request for dynamic table %s: %v", tableName, err)
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+		schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
+		if errSchema != nil {
+			log.Printf("Error loading schema for dynamic table %s during filter: %v", tableName, errSchema)
+			http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
+			return
+		}
+		tableData, errData := dynamictablefilter.LoadTableData(tableName)
+		if errData != nil {
+			log.Printf("Error loading data for dynamic table %s during filter: %v", tableName, errData)
+			http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
+			return
+		}
+		filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
+		if errFilter != nil {
+			log.Printf("Error filtering data for dynamic table %s: %v", tableName, errFilter)
+			http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(filteredData)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func serveReactAppHandler(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "./static/app/index.html")
+}
+
+func buildCORSHandler() *cors.Cors {
+	return cors.New(cors.Options{
+		AllowedOrigins: []string{"http://localhost:3000", "http://localhost:8080"},
+		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type"},
+	})
+}
+
+func setupMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/filter", filterHandler)
+	mux.HandleFunc("/schema-editor", schemaEditorHandler)
+	mux.HandleFunc("/generate-schema-code", schematool.GenerateSchemaCodeHandler)
+	mux.HandleFunc("/list-schema-definitions", schematool.ListSchemaDefinitionsHandler)
+	mux.HandleFunc("/load-schema-definition", schematool.LoadSchemaDefinitionHandler)
+	mux.HandleFunc("/list-filterable-entities", listFilterableEntitiesHandler)
+	mux.HandleFunc("/dynamic-tables", listDynamicTablesHandler)
+	mux.HandleFunc("/dynamic-tables/", dynamicTableHandler)
+
+	reactAppFS := http.FileServer(http.Dir("./static/app"))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/app/static"))))
+	mux.Handle("/manifest.json", reactAppFS)
+	mux.Handle("/favicon.ico", reactAppFS)
+	mux.HandleFunc("/", serveReactAppHandler)
+	return mux
+}
+
+func seedData(ctx context.Context) {
+	generateTransactions(100, ctx)
+	generateTest1SchemaData(100, ctx)
+	generateTest2SchemaData(100, ctx)
+	generateTest3SchemaData(100, ctx)
+}
+
 func main() {
 	ctx := context.Background()
 	if client == nil {
@@ -232,125 +358,9 @@ func main() {
 	if err := client.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
-	generateTransactions(100, ctx)
-	generateTest1SchemaData(100, ctx)
-	generateTest2SchemaData(100, ctx)
-	generateTest3SchemaData(100, ctx)
+	seedData(ctx)
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/filter", filterHandler)
-	c := cors.New(cors.Options{
-		AllowedOrigins: []string{"http://localhost:3000", "http://localhost:8080"},
-		AllowedMethods: []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
-	})
-	handler := c.Handler(mux)
-
-	mux.HandleFunc("/schema-editor", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "static/schema_editor.html")
-	})
-	mux.HandleFunc("/generate-schema-code", schematool.GenerateSchemaCodeHandler)
-	mux.HandleFunc("/list-schema-definitions", schematool.ListSchemaDefinitionsHandler)
-	mux.HandleFunc("/load-schema-definition", schematool.LoadSchemaDefinitionHandler)
-	mux.HandleFunc("/list-filterable-entities", func(w http.ResponseWriter, r *http.Request) {
-		entityNames := make([]string, 0, len(registeredAdapters))
-		for name := range registeredAdapters {
-			entityNames = append(entityNames, name)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(entityNames)
-	})
-
-	mux.HandleFunc("/dynamic-tables", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		tables, err := dynamictablefilter.ListDynamicTables()
-		if err != nil {
-			log.Printf("Error listing dynamic tables: %v", err)
-			http.Error(w, "Failed to list dynamic tables", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tables)
-	})
-	mux.HandleFunc("/dynamic-tables/", func(w http.ResponseWriter, r *http.Request) {
-		pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/dynamic-tables/"), "/")
-		if len(pathParts) < 1 || pathParts[0] == "" {
-			http.Error(w, "Table name missing", http.StatusBadRequest)
-			return
-		}
-		tableName := pathParts[0]
-		if len(pathParts) == 1 && r.Method == http.MethodGet {
-			http.Error(w, "Specify /schema or /filter endpoint", http.StatusBadRequest)
-			return
-		}
-		if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
-			schema, err := dynamictablefilter.LoadTableSchema(tableName)
-			if err != nil {
-				log.Printf("Error loading schema for dynamic table %s: %v", tableName, err)
-				if os.IsNotExist(err) {
-					http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
-				} else {
-					http.Error(w, "Failed to load schema for table "+tableName, http.StatusInternalServerError)
-				}
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(schema)
-			return
-		}
-		if len(pathParts) == 2 && pathParts[1] == "filter" && r.Method == http.MethodPost {
-			var requestBody struct {
-				Filter interface{} `json:"filter"`
-			}
-			decoder := json.NewDecoder(r.Body)
-			if err := decoder.Decode(&requestBody); err != nil {
-				log.Printf("Error decoding filter request for dynamic table %s: %v", tableName, err)
-				http.Error(w, "Invalid request body", http.StatusBadRequest)
-				return
-			}
-			schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
-			if errSchema != nil {
-				log.Printf("Error loading schema for dynamic table %s during filter: %v", tableName, errSchema)
-				http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
-				return
-			}
-			tableData, errData := dynamictablefilter.LoadTableData(tableName)
-			if errData != nil {
-				log.Printf("Error loading data for dynamic table %s during filter: %v", tableName, errData)
-				http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
-				return
-			}
-			filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
-			if errFilter != nil {
-				log.Printf("Error filtering data for dynamic table %s: %v", tableName, errFilter)
-				http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(filteredData)
-			return
-		}
-		http.NotFound(w, r)
-	})
-
-	reactAppFS := http.FileServer(http.Dir("./static/app"))
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/app/static"))))
-	mux.Handle("/manifest.json", reactAppFS)
-	mux.Handle("/favicon.ico", reactAppFS)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/filter") ||
-			strings.HasPrefix(r.URL.Path, "/dynamic-tables") ||
-			strings.HasPrefix(r.URL.Path, "/schema-editor") ||
-			strings.HasPrefix(r.URL.Path, "/generate-schema-code") ||
-			strings.HasPrefix(r.URL.Path, "/list-schema-definitions") ||
-			strings.HasPrefix(r.URL.Path, "/load-schema-definition") ||
-			strings.HasPrefix(r.URL.Path, "/list-filterable-entities") {
-		}
-		http.ServeFile(w, r, "./static/app/index.html")
-	})
+	handler := buildCORSHandler().Handler(setupMux())
 
 	fmt.Println("Go backend server listening on :8080")
 	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
