@@ -159,6 +159,33 @@ func TestBuildCORSHandler(t *testing.T) {
 	}
 }
 
+func TestPrepareServer(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	handler, err := prepareServer(context.Background())
+	if err != nil {
+		t.Fatalf("prepareServer error: %v", err)
+	}
+	if handler == nil {
+		t.Fatal("handler is nil")
+	}
+}
+
+func TestPrepareServer_NilClient(t *testing.T) {
+	original := client
+	client = nil
+	defer func() { client = original }()
+
+	if _, err := prepareServer(context.Background()); err == nil {
+		t.Error("expected error when client is nil")
+	}
+}
+
+func TestPrintStartupBanner(t *testing.T) {
+	printStartupBanner()
+}
+
 func TestSchemaEditorHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/schema-editor", nil)
 	w := httptest.NewRecorder()

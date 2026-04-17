@@ -341,21 +341,29 @@ func seedData(ctx context.Context) {
 	generateTest3SchemaData(100, ctx)
 }
 
-func main() {
-	ctx := context.Background()
+func prepareServer(ctx context.Context) (http.Handler, error) {
 	if client == nil {
-		log.Fatal("Ent client failed to initialize")
+		return nil, fmt.Errorf("ent client failed to initialize")
 	}
-	defer client.Close()
 	if err := client.Schema.Create(ctx); err != nil {
-		log.Fatalf("failed creating schema resources: %v", err)
+		return nil, fmt.Errorf("failed creating schema resources: %w", err)
 	}
 	seedData(ctx)
+	return buildCORSHandler().Handler(setupMux()), nil
+}
 
-	handler := buildCORSHandler().Handler(setupMux())
-
+func printStartupBanner() {
 	fmt.Println("Go backend server listening on :8080")
 	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
 	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
+}
+
+func main() {
+	defer client.Close()
+	handler, err := prepareServer(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+	printStartupBanner()
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
