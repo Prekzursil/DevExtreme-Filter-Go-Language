@@ -251,70 +251,87 @@ func listDynamicTablesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func dynamicTableHandler(w http.ResponseWriter, r *http.Request) {
-	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/dynamic-tables/"), "/")
-	if len(pathParts) < 1 || pathParts[0] == "" {
-		http.Error(w, "Table name missing", http.StatusBadRequest)
+	tableName, action, ok := parseDynamicTablePath(w, r)
+	if !ok {
 		return
 	}
-	rawTableName := pathParts[0]
-	if err := dynamictablefilter.ValidateTableName(rawTableName); err != nil {
-		log.Printf("Error: dynamic table request with invalid name: %v", err)
-		http.Error(w, "Invalid table name", http.StatusBadRequest)
-		return
-	}
-	tableName := rawTableName
-	if len(pathParts) == 1 && r.Method == http.MethodGet {
+	if action == "" && r.Method == http.MethodGet {
 		http.Error(w, "Specify /schema or /filter endpoint", http.StatusBadRequest)
 		return
 	}
-	if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
-		schema, err := dynamictablefilter.LoadTableSchema(tableName)
-		if err != nil {
-			log.Printf("Error loading schema for dynamic table (path validated): %v", err)
-			if os.IsNotExist(err) {
-				http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
-			} else {
-				http.Error(w, "Failed to load schema for table "+tableName, http.StatusInternalServerError)
-			}
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(schema)
+	if action == "schema" && r.Method == http.MethodGet {
+		handleDynamicSchema(w, tableName)
 		return
 	}
-	if len(pathParts) == 2 && pathParts[1] == "filter" && r.Method == http.MethodPost {
-		var requestBody struct {
-			Filter interface{} `json:"filter"`
-		}
-		decoder := json.NewDecoder(r.Body)
-		if err := decoder.Decode(&requestBody); err != nil {
-			log.Printf("Error decoding filter request for dynamic table (path validated): %v", err)
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-		schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
-		if errSchema != nil {
-			log.Printf("Error loading schema during filter (path validated): %v", errSchema)
-			http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
-			return
-		}
-		tableData, errData := dynamictablefilter.LoadTableData(tableName)
-		if errData != nil {
-			log.Printf("Error loading data during filter (path validated): %v", errData)
-			http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
-			return
-		}
-		filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
-		if errFilter != nil {
-			log.Printf("Error filtering data (path validated): %v", errFilter)
-			http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(filteredData)
+	if action == "filter" && r.Method == http.MethodPost {
+		handleDynamicFilter(w, r, tableName)
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func parseDynamicTablePath(w http.ResponseWriter, r *http.Request) (tableName, action string, ok bool) {
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/dynamic-tables/"), "/")
+	if len(pathParts) < 1 || pathParts[0] == "" {
+		http.Error(w, "Table name missing", http.StatusBadRequest)
+		return "", "", false
+	}
+	if err := dynamictablefilter.ValidateTableName(pathParts[0]); err != nil {
+		log.Printf("Error: dynamic table request with invalid name: %v", err)
+		http.Error(w, "Invalid table name", http.StatusBadRequest)
+		return "", "", false
+	}
+	tableName = pathParts[0]
+	if len(pathParts) >= 2 {
+		action = pathParts[1]
+	}
+	return tableName, action, true
+}
+
+func handleDynamicSchema(w http.ResponseWriter, tableName string) {
+	schema, err := dynamictablefilter.LoadTableSchema(tableName)
+	if err != nil {
+		log.Printf("Error loading schema for dynamic table (path validated): %v", err)
+		if os.IsNotExist(err) {
+			http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to load schema for table "+tableName, http.StatusInternalServerError)
+		}
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(schema)
+}
+
+func handleDynamicFilter(w http.ResponseWriter, r *http.Request, tableName string) {
+	var requestBody struct {
+		Filter interface{} `json:"filter"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		log.Printf("Error decoding filter request for dynamic table (path validated): %v", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
+	if errSchema != nil {
+		log.Printf("Error loading schema during filter (path validated): %v", errSchema)
+		http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
+		return
+	}
+	tableData, errData := dynamictablefilter.LoadTableData(tableName)
+	if errData != nil {
+		log.Printf("Error loading data during filter (path validated): %v", errData)
+		http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
+		return
+	}
+	filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
+	if errFilter != nil {
+		log.Printf("Error filtering data (path validated): %v", errFilter)
+		http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(filteredData)
 }
 
 func serveReactAppHandler(w http.ResponseWriter, r *http.Request) {

@@ -125,6 +125,15 @@ func TestGetPredicateForField_Errors(t *testing.T) {
 	}
 }
 
+func exerciseFieldOps(t *testing.T, ad *GenericEntAdapter, field string, ops []string, value interface{}) {
+	t.Helper()
+	for _, op := range ops {
+		if _, err := ad.GetPredicateForField(field, op, value); err != nil {
+			t.Errorf("%s %s: unexpected error: %v", field, op, err)
+		}
+	}
+}
+
 func TestGetPredicateForField_AllTypes(t *testing.T) {
 	cleanup := writeTempSchema(t, "alltypes", []fieldSpec{
 		{Name: "name", Type: "string"},
@@ -142,42 +151,15 @@ func TestGetPredicateForField_AllTypes(t *testing.T) {
 	}
 
 	stringOps := []string{"=", "<>", "contains", "notcontains", "startswith", "endswith"}
-	for _, op := range stringOps {
-		if _, err := ad.GetPredicateForField("name", op, "abc"); err != nil {
-			t.Errorf("string %s: unexpected error: %v", op, err)
-		}
-	}
+	numericOps := []string{"=", "<>", ">", ">=", "<", "<="}
+	boolOps := []string{"=", "<>"}
 
-	intOps := []string{"=", "<>", ">", ">=", "<", "<="}
-	for _, op := range intOps {
-		if _, err := ad.GetPredicateForField("count", op, 42); err != nil {
-			t.Errorf("int %s: unexpected error: %v", op, err)
-		}
-	}
-
-	for _, op := range intOps {
-		if _, err := ad.GetPredicateForField("rate", op, 3.14); err != nil {
-			t.Errorf("float %s: unexpected error: %v", op, err)
-		}
-	}
-
-	for _, op := range []string{"=", "<>"} {
-		if _, err := ad.GetPredicateForField("active", op, true); err != nil {
-			t.Errorf("bool %s: unexpected error: %v", op, err)
-		}
-	}
-
-	for _, op := range intOps {
-		if _, err := ad.GetPredicateForField("when", op, "2024-01-01T00:00:00Z"); err != nil {
-			t.Errorf("time %s: unexpected error: %v", op, err)
-		}
-	}
-
-	for _, op := range stringOps {
-		if _, err := ad.GetPredicateForField("text", op, "hello"); err != nil {
-			t.Errorf("text %s: unexpected error: %v", op, err)
-		}
-	}
+	exerciseFieldOps(t, ad, "name", stringOps, "abc")
+	exerciseFieldOps(t, ad, "count", numericOps, 42)
+	exerciseFieldOps(t, ad, "rate", numericOps, 3.14)
+	exerciseFieldOps(t, ad, "active", boolOps, true)
+	exerciseFieldOps(t, ad, "when", numericOps, "2024-01-01T00:00:00Z")
+	exerciseFieldOps(t, ad, "text", stringOps, "hello")
 }
 
 func TestGetPredicateForField_Between(t *testing.T) {
