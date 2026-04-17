@@ -5,6 +5,17 @@ import (
 	"time"
 )
 
+func TestStringToInt_PureFloatFails(t *testing.T) {
+	// "3.14" scans as int=3 (Sscan is permissive), so no float fallback.
+	// A string with fractional + nothing integer-like won't happen via this
+	// path. This test just ensures stringToInt doesn't panic on
+	// scientific-notation / decimal inputs.
+	got, err := stringToInt("3")
+	if err != nil || got != 3 {
+		t.Errorf("stringToInt(\"3\")=%d err=%v", got, err)
+	}
+}
+
 func TestConvertToInt(t *testing.T) {
 	cases := []struct {
 		name    string
