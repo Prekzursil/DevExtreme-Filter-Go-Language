@@ -41,6 +41,20 @@ func GetAdapter(entityName string) (EntityAdapter, error) {
 // ParseFilterToPredicates converts a DevExtreme filter object into an *sql.Predicate
 // using the provided adapter for entity-specific logic.
 func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (PredicateFunc, error) {
+	filterArray, err := normalizeFilterInput(adapter, filterInput)
+	if err != nil || filterArray == nil {
+		return nil, err
+	}
+	if isNotFilter(filterArray) {
+		return parseNotFilter(adapter, filterArray)
+	}
+	if simple, ok := trySimpleCondition(filterArray); ok {
+		return adapter.GetPredicateForField(simple.field, simple.op, simple.value)
+	}
+	return parseGroupFilter(adapter, filterArray)
+}
+
+func normalizeFilterInput(adapter EntityAdapter, filterInput interface{}) ([]interface{}, error) {
 	if adapter == nil {
 		return nil, fmt.Errorf("entity adapter cannot be nil")
 	}
@@ -54,13 +68,7 @@ func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (Pr
 	if len(filterArray) == 0 {
 		return nil, nil
 	}
-	if isNotFilter(filterArray) {
-		return parseNotFilter(adapter, filterArray)
-	}
-	if simple, ok := trySimpleCondition(filterArray); ok {
-		return adapter.GetPredicateForField(simple.field, simple.op, simple.value)
-	}
-	return parseGroupFilter(adapter, filterArray)
+	return filterArray, nil
 }
 
 func isNotFilter(filterArray []interface{}) bool {
@@ -166,21 +174,38 @@ func combineGroupParts(adapter EntityAdapter, predicates []PredicateFunc, ops []
 
 // Helper to convert to int (from float64 which JSON unmarshals numbers to, or string)
 func convertToInt(val interface{}) (int, error) {
-	switch v := val.(type) {
-	case float64:
-		return floatToInt(v)
-	case float32:
-		return floatToInt(float64(v))
-	case int:
-		return v, nil
-	case int32:
-		return int(v), nil
-	case int64:
-		return int(v), nil
-	case string:
-		return stringToInt(v)
+	if i, ok := integerKind(val); ok {
+		return i, nil
+	}
+	if f, ok := floatKind(val); ok {
+		return floatToInt(f)
+	}
+	if s, ok := val.(string); ok {
+		return stringToInt(s)
 	}
 	return 0, fmt.Errorf("cannot convert %T to int", val)
+}
+
+func integerKind(val interface{}) (int, bool) {
+	switch v := val.(type) {
+	case int:
+		return v, true
+	case int32:
+		return int(v), true
+	case int64:
+		return int(v), true
+	}
+	return 0, false
+}
+
+func floatKind(val interface{}) (float64, bool) {
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	}
+	return 0, false
 }
 
 func floatToInt(v float64) (int, error) {
@@ -230,29 +255,32 @@ func convertToTime(val interface{}) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unable to parse date string '%s' with known layouts", strVal)
 }
 
-// convertToFloat64 is already in main.go, but for utility, can be here too.
-// If defined in both, ensure they are identical or remove from one.
-// For now, assuming it's accessible from main.go. If adapters are moved to own package, this needs to be here.
+// convertToFloat64 converts an interface{} to float64, handling numeric
+// types and decimal-formatted strings.
 func convertToFloat64(val interface{}) (float64, error) {
-	switch v := val.(type) {
-	case float64:
-		return v, nil
-	case float32:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case int64:
-		return float64(v), nil
-	case string: // Attempt to parse string to float
-		var f float64
-		_, err := fmt.Sscan(v, &f)
-		if err == nil {
-			return f, nil
-		}
-		return 0, fmt.Errorf("cannot convert string '%s' to float64: %w", v, err)
-	default:
-		return 0, fmt.Errorf("expected numeric type or string representation of number, got %T for value %+v", val, val)
+	if f, ok := numericToFloat64(val); ok {
+		return f, nil
 	}
+	if s, ok := val.(string); ok {
+		return stringToFloat64(s)
+	}
+	return 0, fmt.Errorf("expected numeric type or string representation of number, got %T", val)
+}
+
+func numericToFloat64(val interface{}) (float64, bool) {
+	if f, ok := floatKind(val); ok {
+		return f, true
+	}
+	if i, ok := integerKind(val); ok {
+		return float64(i), true
+	}
+	return 0, false
+}
+
+func stringToFloat64(s string) (float64, error) {
+	var f float64
+	if _, err := fmt.Sscan(s, &f); err != nil {
+		return 0, fmt.Errorf("cannot convert string %q to float64: %w", s, err)
+	}
+	return f, nil
 }

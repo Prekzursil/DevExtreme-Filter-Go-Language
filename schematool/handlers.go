@@ -16,60 +16,66 @@ func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	req, ok := decodeSchemaRequest(w, r)
+	if !ok {
+		return
+	}
+	payload, err := generateSchemaPayload(*req)
+	if err != nil {
+		log.Printf("Error generating schema payload: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeSchemaResponse(w, payload)
+	persistSchemaDefinition(*req)
+}
 
+func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (*SchemaRequest, bool) {
 	var req SchemaRequest
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Printf("Error decoding /generate-schema-code request: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+		return nil, false
 	}
+	return &req, true
+}
 
-	log.Printf("Received /generate-schema-code request in schematool: %+v", req)
-
+func generateSchemaPayload(req SchemaRequest) (map[string]string, error) {
 	goCode, err := GenerateGoSchemaCode(req)
 	if err != nil {
-		log.Printf("Error generating Go schema code: %v", err)
-		http.Error(w, fmt.Sprintf("Error generating schema code: %v", err), http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("Error generating schema code: %w", err)
 	}
-
 	adapterCode, err := GenerateGoAdapterCode(req)
 	if err != nil {
-		log.Printf("Error generating Go adapter code: %v", err)
-		http.Error(w, fmt.Sprintf("Error generating adapter code: %v", err), http.StatusInternalServerError)
-		return
+		return nil, fmt.Errorf("Error generating adapter code: %w", err)
 	}
+	return map[string]string{"schemaCode": goCode, "adapterCode": adapterCode}, nil
+}
 
-	responsePayload := map[string]string{
-		"schemaCode":  goCode,
-		"adapterCode": adapterCode,
-	}
-
+func writeSchemaResponse(w http.ResponseWriter, payload map[string]string) {
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(responsePayload); err != nil {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		log.Printf("Error encoding schema/adapter code response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 	}
+}
 
-	// Save the schema definition (req) to a file
+func persistSchemaDefinition(req SchemaRequest) {
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Printf("Error creating schema_definitions directory: %v", err)
 		return
 	}
-
 	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
-	fileData, marshalErr := json.MarshalIndent(req, "", "  ")
-	if marshalErr != nil {
-		log.Printf("Error marshalling schema definition for saving: %v", marshalErr)
+	data, err := json.MarshalIndent(req, "", "  ")
+	if err != nil {
+		log.Printf("Error marshalling schema definition for saving: %v", err)
 		return
 	}
-
-	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
 		log.Printf("Error writing schema definition file %s: %v", filePath, err)
-	} else {
-		log.Printf("Saved schema definition to %s", filePath)
+		return
 	}
+	log.Printf("Saved schema definition to %s", filePath)
 }
 
 // ListSchemaDefinitionsHandler lists saved schema definition files.

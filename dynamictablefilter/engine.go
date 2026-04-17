@@ -136,42 +136,40 @@ func coerceToFloat64(val interface{}) (float64, bool) {
 	return 0, false
 }
 
+var stringOpFuncs = map[string]func(r, f string) bool{
+	"=":           func(r, f string) bool { return r == f },
+	"<>":          func(r, f string) bool { return r != f },
+	"contains":    strings.Contains,
+	"startswith":  strings.HasPrefix,
+	"endswith":    strings.HasSuffix,
+	"notcontains": func(r, f string) bool { return !strings.Contains(r, f) },
+}
+
 func evalStringOp(recordVal, filterVal interface{}, op string) bool {
+	fn, ok := stringOpFuncs[op]
+	if !ok {
+		return false
+	}
 	r := strings.ToLower(fmt.Sprintf("%v", recordVal))
 	f := strings.ToLower(fmt.Sprintf("%v", filterVal))
-	switch op {
-	case "=":
-		return r == f
-	case "<>":
-		return r != f
-	case "contains":
-		return strings.Contains(r, f)
-	case "startswith":
-		return strings.HasPrefix(r, f)
-	case "endswith":
-		return strings.HasSuffix(r, f)
-	case "notcontains":
-		return !strings.Contains(r, f)
-	}
-	return false
+	return fn(r, f)
+}
+
+var numericOpFuncs = map[string]func(r, f float64) bool{
+	"=":  func(r, f float64) bool { return r == f },
+	"<>": func(r, f float64) bool { return r != f },
+	">":  func(r, f float64) bool { return r > f },
+	">=": func(r, f float64) bool { return r >= f },
+	"<":  func(r, f float64) bool { return r < f },
+	"<=": func(r, f float64) bool { return r <= f },
 }
 
 func evalNumericOp(r, f float64, op string) bool {
-	switch op {
-	case "=":
-		return r == f
-	case "<>":
-		return r != f
-	case ">":
-		return r > f
-	case ">=":
-		return r >= f
-	case "<":
-		return r < f
-	case "<=":
-		return r <= f
+	fn, ok := numericOpFuncs[op]
+	if !ok {
+		return false
 	}
-	return false
+	return fn(r, f)
 }
 
 func evalIntOp(recordVal, filterVal interface{}, op string) bool {
@@ -213,44 +211,42 @@ func evalBoolOp(recordVal, filterVal interface{}, op string) bool {
 	return false
 }
 
+var timeOpFuncs = map[string]func(r, f time.Time) bool{
+	"=":  func(r, f time.Time) bool { return r.Equal(f) },
+	"<>": func(r, f time.Time) bool { return !r.Equal(f) },
+	">":  func(r, f time.Time) bool { return r.After(f) },
+	">=": func(r, f time.Time) bool { return !r.Before(f) },
+	"<":  func(r, f time.Time) bool { return r.Before(f) },
+	"<=": func(r, f time.Time) bool { return !r.After(f) },
+}
+
 func evalTimeOp(recordVal, filterVal interface{}, op string) bool {
 	r, okR := parseTimeAnyLayout(fmt.Sprintf("%v", recordVal))
 	f, okF := parseTimeAnyLayout(fmt.Sprintf("%v", filterVal))
 	if !okR || !okF {
 		return false
 	}
-	switch op {
-	case "=":
-		return r.Equal(f)
-	case "<>":
-		return !r.Equal(f)
-	case ">":
-		return r.After(f)
-	case ">=":
-		return !r.Before(f)
-	case "<":
-		return r.Before(f)
-	case "<=":
-		return !r.After(f)
+	fn, ok := timeOpFuncs[op]
+	if !ok {
+		return false
 	}
-	return false
+	return fn(r, f)
+}
+
+var typeEvaluators = map[string]func(recordVal, filterVal interface{}, op string) bool{
+	"string":    evalStringOp,
+	"int":       evalIntOp,
+	"float64":   evalFloatOp,
+	"bool":      evalBoolOp,
+	"time.Time": evalTimeOp,
 }
 
 func evaluateCondition(recordVal interface{}, op string, filterVal interface{}, fieldType string) bool {
-	op = strings.ToLower(op)
-	switch fieldType {
-	case "string":
-		return evalStringOp(recordVal, filterVal, op)
-	case "int":
-		return evalIntOp(recordVal, filterVal, op)
-	case "float64":
-		return evalFloatOp(recordVal, filterVal, op)
-	case "bool":
-		return evalBoolOp(recordVal, filterVal, op)
-	case "time.Time":
-		return evalTimeOp(recordVal, filterVal, op)
+	fn, ok := typeEvaluators[fieldType]
+	if !ok {
+		return false
 	}
-	return false
+	return fn(recordVal, filterVal, strings.ToLower(op))
 }
 
 func applyFilterRecursive(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
@@ -323,21 +319,33 @@ func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filter
 }
 
 func applyGroupStep(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}, i int, current bool) (bool, error) {
-	if i+1 >= len(filterGroup) {
-		return false, fmt.Errorf("malformed group filter: missing condition after operator")
-	}
-	opStr, ok := filterGroup[i].(string)
-	if !ok {
-		return false, fmt.Errorf("logical operator must be a string, got %T", filterGroup[i])
-	}
-	sub, ok := filterGroup[i+1].([]interface{})
-	if !ok {
-		return false, fmt.Errorf("group filter operand must be an array, got %T", filterGroup[i+1])
+	opStr, sub, err := extractGroupStep(filterGroup, i)
+	if err != nil {
+		return false, err
 	}
 	match, err := applyFilterRecursive(record, schema, sub)
 	if err != nil {
 		return false, err
 	}
+	return combineBool(current, match, opStr)
+}
+
+func extractGroupStep(filterGroup []interface{}, i int) (string, []interface{}, error) {
+	if i+1 >= len(filterGroup) {
+		return "", nil, fmt.Errorf("malformed group filter: missing condition after operator")
+	}
+	opStr, ok := filterGroup[i].(string)
+	if !ok {
+		return "", nil, fmt.Errorf("logical operator must be a string, got %T", filterGroup[i])
+	}
+	sub, ok := filterGroup[i+1].([]interface{})
+	if !ok {
+		return "", nil, fmt.Errorf("group filter operand must be an array, got %T", filterGroup[i+1])
+	}
+	return opStr, sub, nil
+}
+
+func combineBool(current, match bool, opStr string) (bool, error) {
 	switch strings.ToLower(opStr) {
 	case "and":
 		return current && match, nil

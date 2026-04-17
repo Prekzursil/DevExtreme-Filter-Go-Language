@@ -102,28 +102,26 @@ func buildBetweenPredicate(columnName, field, fieldType string, val interface{})
 	if !ok || len(bounds) != 2 {
 		return nil, fmt.Errorf("operator 'between' requires an array of two values, got %T for field %s", val, field)
 	}
+	lower, upper, err := extractBetweenBounds(bounds, field, fieldType)
+	if err != nil {
+		return nil, err
+	}
+	return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
+}
+
+func extractBetweenBounds(bounds []interface{}, field, fieldType string) (interface{}, interface{}, error) {
 	switch fieldType {
 	case "int":
-		lower, upper, err := betweenInts(bounds, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
+		lo, hi, err := betweenInts(bounds, field)
+		return lo, hi, err
 	case "float64":
-		lower, upper, err := betweenFloats(bounds, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
+		lo, hi, err := betweenFloats(bounds, field)
+		return lo, hi, err
 	case "time.Time":
-		lower, upper, err := betweenTimes(bounds, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-	default:
-		return nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldType, field)
+		lo, hi, err := betweenTimes(bounds, field)
+		return lo, hi, err
 	}
+	return nil, nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldType, field)
 }
 
 func betweenInts(bounds []interface{}, field string) (int, int, error) {
@@ -165,20 +163,23 @@ func betweenTimes(bounds []interface{}, field string) (time.Time, time.Time, err
 	return lower, upper, nil
 }
 
+type scalarBuilder func(columnName, field, opLower string, val interface{}) (PredicateFunc, error)
+
+var scalarBuilders = map[string]scalarBuilder{
+	"string":    scalarString,
+	"text":      scalarString,
+	"int":       scalarInt,
+	"float64":   scalarFloat,
+	"bool":      scalarBool,
+	"time.Time": scalarTime,
+}
+
 func buildScalarPredicate(columnName, field, fieldType, opLower, opRaw string, val interface{}) (PredicateFunc, error) {
-	switch fieldType {
-	case "string", "text":
-		return scalarString(columnName, field, opLower, val)
-	case "int":
-		return scalarInt(columnName, field, opLower, val)
-	case "float64":
-		return scalarFloat(columnName, field, opLower, val)
-	case "bool":
-		return scalarBool(columnName, field, opLower, val)
-	case "time.Time":
-		return scalarTime(columnName, field, opLower, val)
+	builder, ok := scalarBuilders[fieldType]
+	if !ok {
+		return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldType, field)
 	}
-	return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldType, field)
+	return builder(columnName, field, opLower, val)
 }
 
 func scalarString(columnName, field, opLower string, val interface{}) (PredicateFunc, error) {
