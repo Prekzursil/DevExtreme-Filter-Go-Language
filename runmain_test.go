@@ -128,6 +128,23 @@ func TestCloseClient_NoopWhenNil(t *testing.T) {
 	closeClient()
 }
 
+// TestCloseClient_ClosesThrowawayClient covers the Close() branch by
+// swapping the package-level `client` for a fresh in-memory ent client
+// and invoking closeClient() directly.
+func TestCloseClient_ClosesThrowawayClient(t *testing.T) {
+	throwaway, err := ent.Open("sqlite3", "file:ent_close_probe?mode=memory&cache=shared&_fk=1")
+	if err != nil {
+		t.Skipf("could not open throwaway ent client: %v", err)
+	}
+
+	origClient := client
+	client = throwaway
+	defer func() { client = origClient }()
+
+	// Default closeClient body runs client.Close() on the throwaway.
+	closeClient()
+}
+
 func TestMain_ExitCode(t *testing.T) {
 	if client == nil {
 		t.Skip("ent client not initialized")

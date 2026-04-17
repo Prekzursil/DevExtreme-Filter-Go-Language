@@ -16,6 +16,21 @@ func TestStringToInt_PureFloatFails(t *testing.T) {
 	}
 }
 
+func TestStringToInt_FloatFallback(t *testing.T) {
+	// Strings that fmt.Sscan cannot scan as int at all but can scan as
+	// float exercise stringToInt's floatToInt fallback. "." is treated
+	// as a numeric-ish rune that fails int-scan but a "." alone fails
+	// float-scan too. Use ".5" and scientific-only forms.
+	for _, tc := range []struct{ s string }{
+		{".5"},
+		{"1e+1"},
+		{"0.1e2"},
+	} {
+		got, err := stringToInt(tc.s)
+		t.Logf("stringToInt(%q) = (%d, %v)", tc.s, got, err)
+	}
+}
+
 
 func TestConvertToInt(t *testing.T) {
 	cases := []struct {

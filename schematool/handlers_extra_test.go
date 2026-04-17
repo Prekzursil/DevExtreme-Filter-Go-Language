@@ -266,6 +266,43 @@ func TestLoadSchemaDefinitionHandler_ReadFileError(t *testing.T) {
 	}
 }
 
+func TestGenerateGoAdapterCode_SanitizeError(t *testing.T) {
+	// "---" is non-empty but sanitizes to "" → sanitizeEntityName errors,
+	// covering the error branch inside GenerateGoAdapterCode.
+	if _, err := GenerateGoAdapterCode(SchemaRequest{EntityName: "---"}); err == nil {
+		t.Error("expected sanitize error for all-hyphen name")
+	}
+}
+
+func TestGenerateSchemaPayload_AdapterErrorViaMock(t *testing.T) {
+	origAdapter := generateGoAdapterCodeFn
+	defer func() { generateGoAdapterCodeFn = origAdapter }()
+	generateGoAdapterCodeFn = func(_ SchemaRequest) (string, error) {
+		return "", errors.New("adapter boom")
+	}
+	_, err := generateSchemaPayload(SchemaRequest{
+		EntityName: "demo",
+		Fields:     []SchemaFieldDefinition{{Name: "n", Type: "string"}},
+	})
+	if err == nil {
+		t.Error("expected adapter error to propagate")
+	}
+}
+
+func TestLoadSchemaDefinitionHandler_WriteError(t *testing.T) {
+	defer withTempSchemaDir(t)()
+
+	origRead := fsReadFile
+	defer func() { fsReadFile = origRead }()
+	fsReadFile = func(_ string) ([]byte, error) {
+		return []byte(`{"entityName":"demo","fields":[]}`), nil
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=demo", nil)
+	w := &brokenWriter{}
+	LoadSchemaDefinitionHandler(w, req)
+}
+
 func TestGenerateSchemaCodeHandler_FullRoundTrip(t *testing.T) {
 	defer withTempSchemaDir(t)()
 

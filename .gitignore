@@ -15,3 +15,5 @@ test_output.log
 .qlty/results
 .qlty/configs
 .qlty/sources
+coverage.html
+coverage.out

@@ -24,6 +24,8 @@ var (
 	encoderEncodeFn = func(w http.ResponseWriter, v any) error {
 		return json.NewEncoder(w).Encode(v)
 	}
+	generateGoSchemaCodeFn  = GenerateGoSchemaCode
+	generateGoAdapterCodeFn = GenerateGoAdapterCode
 )
 
 func validateEntityName(name string) error {
@@ -67,11 +69,11 @@ func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (*SchemaRequest
 }
 
 func generateSchemaPayload(req SchemaRequest) (map[string]string, error) {
-	goCode, err := GenerateGoSchemaCode(req)
+	goCode, err := generateGoSchemaCodeFn(req)
 	if err != nil {
 		return nil, fmt.Errorf("Error generating schema code: %w", err)
 	}
-	adapterCode, err := GenerateGoAdapterCode(req)
+	adapterCode, err := generateGoAdapterCodeFn(req)
 	if err != nil {
 		return nil, fmt.Errorf("Error generating adapter code: %w", err)
 	}
