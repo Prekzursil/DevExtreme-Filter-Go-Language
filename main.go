@@ -369,11 +369,17 @@ func seedDataN(ctx context.Context, count int) {
 	generateTest3SchemaData(count, ctx)
 }
 
+// ensureSchema is the client.Schema.Create hook. Tests override it when
+// they need prepareServer's schema-create error branch.
+var ensureSchema = func(ctx context.Context) error {
+	return client.Schema.Create(ctx)
+}
+
 func prepareServer(ctx context.Context) (http.Handler, error) {
 	if client == nil {
 		return nil, fmt.Errorf("ent client failed to initialize")
 	}
-	if err := client.Schema.Create(ctx); err != nil {
+	if err := ensureSchema(ctx); err != nil {
 		return nil, fmt.Errorf("failed creating schema resources: %w", err)
 	}
 	return buildCORSHandler().Handler(setupMux()), nil

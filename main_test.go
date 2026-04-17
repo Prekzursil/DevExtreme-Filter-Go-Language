@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -200,6 +201,21 @@ func TestPrepareServer(t *testing.T) {
 	}
 	if handler == nil {
 		t.Fatal("handler is nil")
+	}
+}
+
+func TestPrepareServer_SchemaCreateError(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	orig := ensureSchema
+	defer func() { ensureSchema = orig }()
+	ensureSchema = func(ctx context.Context) error {
+		return fmt.Errorf("simulated schema create failure")
+	}
+
+	if _, err := prepareServer(context.Background()); err == nil {
+		t.Error("expected error from ensureSchema failure")
 	}
 }
 
