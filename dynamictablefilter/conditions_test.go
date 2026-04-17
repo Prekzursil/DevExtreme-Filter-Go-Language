@@ -74,6 +74,12 @@ func TestEvaluateCondition_Float(t *testing.T) {
 	}
 }
 
+func TestEvalBoolOp_UnknownOp(t *testing.T) {
+	if evalBoolOp(true, true, "unknownop") {
+		t.Error("unknown bool op should return false")
+	}
+}
+
 func TestEvaluateCondition_Bool(t *testing.T) {
 	if !evaluateCondition(true, "=", true, "bool") {
 		t.Error("true=true should be true")
