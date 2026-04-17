@@ -369,14 +369,26 @@ func printStartupBanner() {
 	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
 }
 
-func main() {
-	defer client.Close()
+// startServer wires prepareServer + seedData + banner and returns the
+// handler ready to pass to http.ListenAndServe. Extracted from main()
+// so the plumbing is under test; only the actual ListenAndServe call
+// remains in main().
+func startServer() (http.Handler, error) {
 	ctx := context.Background()
 	handler, err := prepareServer(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	seedData(ctx)
 	printStartupBanner()
+	return handler, nil
+}
+
+func main() {
+	defer client.Close()
+	handler, err := startServer()
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

@@ -215,6 +215,33 @@ func TestSeedData(t *testing.T) {
 	seedData(context.Background())
 }
 
+func TestStartServer(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+	origCount := defaultSeedCount
+	defer func() { defaultSeedCount = origCount }()
+	defaultSeedCount = 0
+
+	handler, err := startServer()
+	if err != nil {
+		t.Fatalf("startServer error: %v", err)
+	}
+	if handler == nil {
+		t.Fatal("startServer returned nil handler")
+	}
+}
+
+func TestStartServer_PrepareFails(t *testing.T) {
+	orig := client
+	client = nil
+	defer func() { client = orig }()
+
+	if _, err := startServer(); err == nil {
+		t.Error("expected startServer to propagate prepareServer error when client is nil")
+	}
+}
+
 func TestSchemaEditorHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/schema-editor", nil)
 	w := httptest.NewRecorder()
