@@ -36,7 +36,15 @@ func TestApplyNotFilter_SubError(t *testing.T) {
 }
 
 func TestApplyGroupFilter_FirstElementNotArray(t *testing.T) {
-	filter := []interface{}{"not-a-subgroup", "and", []interface{}{"name", "=", "a"}}
+	// Five elements so applyFilterRecursive sees it as a group (len != 3),
+	// then applyGroupFilter trips on the non-array first element.
+	filter := []interface{}{
+		"not-a-subgroup",
+		"and",
+		[]interface{}{"name", "=", "a"},
+		"and",
+		[]interface{}{"name", "<>", "b"},
+	}
 	if _, err := applyFilterRecursive(map[string]interface{}{"name": "a"}, simpleSchema(), filter); err == nil {
 		t.Error("expected error when first group element is not an array")
 	}
@@ -94,5 +102,35 @@ func TestApplyGroupFilter_StepSubError(t *testing.T) {
 	}
 	if _, err := applyFilterRecursive(map[string]interface{}{"name": "y"}, simpleSchema(), filter); err == nil {
 		t.Error("expected error from group step sub-filter error")
+	}
+}
+
+func TestExtractGroupStep_SubNotArray(t *testing.T) {
+	filter := []interface{}{
+		[]interface{}{"name", "=", "y"},
+		"and",
+		"not-an-array",
+	}
+	if _, err := applyFilterRecursive(map[string]interface{}{"name": "y"}, simpleSchema(), filter); err == nil {
+		t.Error("expected error when group step operand is not an array")
+	}
+}
+
+func TestApplyGroupFilter_OperatorLoopReassignsCurrent(t *testing.T) {
+	// 5-element group with two AND operators so applyGroupFilter's loop
+	// reassigns `current` more than once — exercises the reassignment line.
+	filter := []interface{}{
+		[]interface{}{"name", "=", "Alpha"},
+		"and",
+		[]interface{}{"name", "<>", "Omega"},
+		"and",
+		[]interface{}{"name", "<>", "Omicron"},
+	}
+	got, err := applyFilterRecursive(map[string]interface{}{"name": "Alpha"}, simpleSchema(), filter)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got {
+		t.Error("expected match for all-AND chain on Alpha")
 	}
 }
