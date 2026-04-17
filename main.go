@@ -24,12 +24,28 @@ import (
 
 var client *ent.Client
 
+// entOpen is the ent.Open hook. Tests override it when they need to exercise
+// initOrFatal's error path without a real database failure.
+var entOpen = ent.Open
+
+// fatalf is the log.Fatalf hook. Tests override it to capture fatal messages
+// without terminating the test process.
+var fatalf = log.Fatalf
+
 func init() {
-	var err error
-	client, err = ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	initOrFatal()
+}
+
+// initOrFatal opens the ent client and registers default adapters. Exposed
+// as a named function so tests can swap entOpen/fatalf and exercise the
+// error branch without a real SQLite failure.
+func initOrFatal() {
+	c, err := entOpen("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	if err != nil {
-		log.Fatalf("failed opening connection to sqlite: %v", err)
+		fatalf("failed opening connection to sqlite: %v", err)
+		return
 	}
+	client = c
 	registerDefaultAdapters([]string{"transaction", "test1schema", "test2schema", "test3schema"})
 }
 

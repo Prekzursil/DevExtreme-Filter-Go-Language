@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+
+	"transaction-filter-backend/ent"
 )
 
 func TestStartServer(t *testing.T) {
@@ -88,6 +90,31 @@ func TestRunMain_ListenerError(t *testing.T) {
 
 	if code := runMain(); code != 1 {
 		t.Errorf("runMain returned %d, want 1 when listener errors", code)
+	}
+}
+
+func TestInitOrFatal_ErrorPath(t *testing.T) {
+	origOpen := entOpen
+	defer func() { entOpen = origOpen }()
+	entOpen = func(driverName, dataSourceName string, options ...ent.Option) (*ent.Client, error) {
+		return nil, errors.New("simulated ent.Open failure")
+	}
+
+	origFatal := fatalf
+	defer func() { fatalf = origFatal }()
+	var captured string
+	fatalf = func(format string, args ...interface{}) {
+		captured = format
+	}
+
+	origClient := client
+	client = nil
+	defer func() { client = origClient }()
+
+	initOrFatal()
+
+	if captured == "" {
+		t.Error("expected fatalf to be called on ent.Open error")
 	}
 }
 
