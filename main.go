@@ -30,16 +30,20 @@ func init() {
 	if err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
+	registerDefaultAdapters([]string{"transaction", "test1schema", "test2schema", "test3schema"})
+}
 
-	entitiesToRegister := []string{"transaction", "test1schema", "test2schema", "test3schema"}
-	for _, entityName := range entitiesToRegister {
-		adapter, errAdapter := NewGenericEntAdapter(entityName)
-		if errAdapter != nil {
-			log.Printf("Warning: Failed to create generic adapter for %s: %v. This entity might not be filterable.", entityName, errAdapter)
-		} else {
-			RegisterAdapter(entityName, adapter)
-			log.Printf("Successfully registered generic adapter for entity: %s", entityName)
+// registerDefaultAdapters walks the list of entity names, constructs a generic
+// adapter for each, and registers successful ones. Failures are logged but
+// not fatal so the server can still start with a subset of entities.
+func registerDefaultAdapters(entities []string) {
+	for _, name := range entities {
+		adapter, err := NewGenericEntAdapter(name)
+		if err != nil {
+			log.Print("Warning: failed to create generic adapter (entity suppressed for log-injection guard)")
+			continue
 		}
+		RegisterAdapter(name, adapter)
 	}
 }
 

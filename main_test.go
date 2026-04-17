@@ -186,6 +186,22 @@ func TestPrintStartupBanner(t *testing.T) {
 	printStartupBanner()
 }
 
+func TestRegisterDefaultAdapters(t *testing.T) {
+	before := len(registeredAdapters)
+	registerDefaultAdapters([]string{"transaction"})
+	if len(registeredAdapters) < before {
+		t.Error("registerDefaultAdapters removed existing adapters")
+	}
+}
+
+func TestRegisterDefaultAdapters_MissingSchema(t *testing.T) {
+	before := len(registeredAdapters)
+	registerDefaultAdapters([]string{"definitely-missing-entity-name-123"})
+	if len(registeredAdapters) != before {
+		t.Error("missing schema should not have registered an adapter")
+	}
+}
+
 func TestSchemaEditorHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/schema-editor", nil)
 	w := httptest.NewRecorder()
