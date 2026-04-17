@@ -36,12 +36,11 @@ var fsReadDir = ioutil.ReadDir
 // SetReadDirForTesting replaces the internal directory reader with the
 // supplied function and returns a restore callback. Used from external
 // packages' tests (e.g., main package) to exercise ListDynamicTables
-// error paths without real filesystem failures.
+// error paths without real filesystem failures. Passing nil is a no-op
+// (apart from returning a valid restore callback).
 func SetReadDirForTesting(fn func(dir string) ([]os.FileInfo, error)) func() {
 	orig := fsReadDir
-	if fn == nil {
-		fsReadDir = orig
-	} else {
+	if fn != nil {
 		fsReadDir = fn
 	}
 	return func() { fsReadDir = orig }

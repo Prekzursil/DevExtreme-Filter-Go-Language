@@ -28,6 +28,21 @@ func TestSetReadDirForTesting_NilRestore(t *testing.T) {
 	restore()
 }
 
+func TestSetReadDirForTesting_NonNilReplacesHook(t *testing.T) {
+	var called bool
+	restore := SetReadDirForTesting(func(dir string) ([]os.FileInfo, error) {
+		called = true
+		return nil, nil
+	})
+	defer restore()
+
+	// Trigger the hook via ListDynamicTables to verify it's wired up.
+	_, _ = ListDynamicTables()
+	if !called {
+		t.Error("expected injected read-dir to be called")
+	}
+}
+
 
 func TestValidateTableName(t *testing.T) {
 	cases := []struct {
