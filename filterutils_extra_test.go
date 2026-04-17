@@ -37,6 +37,20 @@ func TestParseGroupFilter_NonStringOperator(t *testing.T) {
 	}
 }
 
+func TestParseNotFilter_SubErrorsOut(t *testing.T) {
+	adapter, err := NewGenericEntAdapter("transaction")
+	if err != nil {
+		t.Skipf("no transaction schema: %v", err)
+	}
+
+	// NOT wrapping a non-array sub should make ParseFilterToPredicates
+	// error, which parseNotFilter wraps with "error parsing NOT sub".
+	filter := []interface{}{"!", "notanarray"}
+	if _, err := ParseFilterToPredicates(adapter, filter); err == nil {
+		t.Error("expected error from NOT over non-array")
+	}
+}
+
 func TestParseNotFilter_SubReturnsNil(t *testing.T) {
 	adapter, err := NewGenericEntAdapter("transaction")
 	if err != nil {
