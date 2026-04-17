@@ -7,8 +7,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+var safeEntityNameRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func validateEntityName(name string) error {
+	if name == "" {
+		return fmt.Errorf("entity name is empty")
+	}
+	if !safeEntityNameRE.MatchString(name) {
+		return fmt.Errorf("entity name contains unsupported characters")
+	}
+	return nil
+}
 
 // GenerateSchemaCodeHandler handles requests to generate schema and adapter code.
 func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,7 +46,7 @@ func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (*SchemaRequest, bool) {
 	var req SchemaRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Error decoding /generate-schema-code request: %v", err)
+		log.Print("Error decoding /generate-schema-code request (details suppressed for log-injection guard)")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return nil, false
 	}
@@ -61,21 +74,25 @@ func writeSchemaResponse(w http.ResponseWriter, payload map[string]string) {
 }
 
 func persistSchemaDefinition(req SchemaRequest) {
+	if err := validateEntityName(req.EntityName); err != nil {
+		log.Print("Not persisting schema: entity name failed validation")
+		return
+	}
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
-		log.Printf("Error creating schema_definitions directory: %v", err)
+		log.Print("Error creating schema_definitions directory (details suppressed)")
 		return
 	}
 	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
 	data, err := json.MarshalIndent(req, "", "  ")
 	if err != nil {
-		log.Printf("Error marshalling schema definition for saving: %v", err)
+		log.Print("Error marshalling schema definition for saving (details suppressed)")
 		return
 	}
 	if err := os.WriteFile(filePath, data, 0644); err != nil {
-		log.Printf("Error writing schema definition file %s: %v", filePath, err)
+		log.Print("Error writing schema definition file (path validated, details suppressed)")
 		return
 	}
-	log.Printf("Saved schema definition to %s", filePath)
+	log.Print("Saved schema definition (path validated)")
 }
 
 // ListSchemaDefinitionsHandler lists saved schema definition files.

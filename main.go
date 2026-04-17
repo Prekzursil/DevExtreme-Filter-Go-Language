@@ -149,13 +149,13 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	predicate, err := ParseFilterToPredicates(adapter, req.Filter)
 	if err != nil {
-		log.Printf("Backend: Error parsing filter (entity resolved): %v", err)
+		log.Print("Backend: Error parsing filter (details suppressed for log-injection guard)")
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
 		return
 	}
 	results, err := runEntityQuery(context.Background(), req.Entity, predicate)
 	if err != nil {
-		log.Printf("Backend: Error executing query (entity resolved): %v", err)
+		log.Print("Backend: Error executing query (details suppressed for log-injection guard)")
 		status := http.StatusInternalServerError
 		if errors.Is(err, errUnsupportedEntity) {
 			status = http.StatusBadRequest
@@ -186,7 +186,7 @@ func decodeFilterRequest(w http.ResponseWriter, r *http.Request) (*filterRequest
 func resolveAdapter(w http.ResponseWriter, entity string) (EntityAdapter, bool) {
 	adapter, err := GetAdapter(entity)
 	if err != nil {
-		log.Printf("Backend: Failed to get adapter (entity name suppressed): %v", err)
+		log.Print("Backend: Failed to resolve adapter (entity and error suppressed for log-injection guard)")
 		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", entity), http.StatusBadRequest)
 		return nil, false
 	}
@@ -327,7 +327,7 @@ func parseDynamicTablePath(w http.ResponseWriter, r *http.Request) (tableName, a
 func handleDynamicSchema(w http.ResponseWriter, tableName string) {
 	schema, err := dynamictablefilter.LoadTableSchema(tableName)
 	if err != nil {
-		log.Printf("Error loading schema for dynamic table (path validated): %v", err)
+		log.Print("Error loading schema for dynamic table (path validated, details suppressed)")
 		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
 		} else {
@@ -344,19 +344,19 @@ func handleDynamicFilter(w http.ResponseWriter, r *http.Request, tableName strin
 		Filter interface{} `json:"filter"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
-		log.Printf("Error decoding filter request for dynamic table (path validated): %v", err)
+		log.Print("Error decoding filter request for dynamic table (path validated, details suppressed)")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 	schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
 	if errSchema != nil {
-		log.Printf("Error loading schema during filter (path validated): %v", errSchema)
+		log.Print("Error loading schema during filter (path validated, details suppressed)")
 		http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
 		return
 	}
 	tableData, errData := dynamictablefilter.LoadTableData(tableName)
 	if errData != nil {
-		log.Printf("Error loading data during filter (path validated): %v", errData)
+		log.Print("Error loading data during filter (path validated, details suppressed)")
 		http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
 		return
 	}
