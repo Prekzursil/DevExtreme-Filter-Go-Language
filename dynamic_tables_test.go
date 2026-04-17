@@ -102,6 +102,26 @@ func TestDynamicTableHandler_SchemaNotFound(t *testing.T) {
 	}
 }
 
+func TestDynamicTableHandler_SchemaParseError(t *testing.T) {
+	orig := dynamictablefilter.GetBaseTablesPath()
+	defer dynamictablefilter.SetBaseTablesPath(orig)
+
+	tmp := t.TempDir()
+	broken := filepath.Join(tmp, "broken")
+	_ = os.MkdirAll(broken, 0755)
+	// Write malformed JSON so LoadTableSchema errors with unmarshal-fail
+	// (not os.ErrNotExist) → handleDynamicSchema takes the 500 branch.
+	_ = os.WriteFile(filepath.Join(broken, "schema.json"), []byte("{bad"), 0644)
+	dynamictablefilter.SetBaseTablesPath(tmp)
+
+	req := httptest.NewRequest(http.MethodGet, "/dynamic-tables/broken/schema", nil)
+	w := httptest.NewRecorder()
+	dynamicTableHandler(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status=%d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
 func TestDynamicTableHandler_FilterSuccess(t *testing.T) {
 	defer withDynamicTables(t)()
 
