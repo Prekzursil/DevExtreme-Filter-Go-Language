@@ -142,3 +142,24 @@ func TestCoerceToFloat64_FmtSprintfFallback(t *testing.T) {
 		t.Error("struct should fail coercion")
 	}
 }
+
+func TestCoerceToFloat64_StringBranch(t *testing.T) {
+	got, ok := coerceToFloat64("3.14")
+	if !ok {
+		t.Fatal("expected ok for string float")
+	}
+	if got != 3.14 {
+		t.Errorf("got %v, want 3.14", got)
+	}
+}
+
+func TestCoerceToFloat64_FmtFallbackBranch(t *testing.T) {
+	// A type whose %v prints a parsable float but isn't string/int/float64.
+	got, ok := coerceToFloat64(float32(2.5))
+	if !ok {
+		t.Fatal("expected ok for float32 via fmt.Sprintf fallback")
+	}
+	if got != 2.5 {
+		t.Errorf("got %v, want 2.5", got)
+	}
+}

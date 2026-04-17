@@ -332,6 +332,16 @@ func TestRunMain_ListenerError(t *testing.T) {
 	}
 }
 
+func TestCloseClient_NoopWhenNil(t *testing.T) {
+	origClient := client
+	client = nil
+	defer func() { client = origClient }()
+
+	// Call the default closeClient body (not the mocked no-op) to cover
+	// its "client != nil" guard.
+	closeClient()
+}
+
 func TestMain_ExitCode(t *testing.T) {
 	if client == nil {
 		t.Skip("ent client not initialized")
