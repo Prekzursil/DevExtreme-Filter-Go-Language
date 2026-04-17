@@ -124,6 +124,41 @@ func TestFilterHandler_WithPredicate(t *testing.T) {
 	}
 }
 
+// TestFilterHandler_EntitiesWithPredicates exercises query*Schema
+// helpers with predicate != nil so the "if predicate != nil" branch
+// inside them gets covered for each entity.
+func TestFilterHandler_EntitiesWithPredicates(t *testing.T) {
+	if client == nil {
+		t.Skip("ent client not initialized")
+	}
+
+	cases := []struct {
+		entity string
+		filter []interface{}
+	}{
+		{"transaction", []interface{}{"amount", ">", 0.0}},
+		{"test1schema", []interface{}{"field_int", ">", 0}},
+		{"test2schema", []interface{}{"quantity", ">", 0}},
+		{"test3schema", []interface{}{"stock_count", ">", 0}},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.entity, func(t *testing.T) {
+			if _, err := GetAdapter(tc.entity); err != nil {
+				t.Skipf("no adapter: %v", err)
+			}
+			body := map[string]interface{}{"entity": tc.entity, "filter": tc.filter}
+			b, _ := json.Marshal(body)
+			req := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(b))
+			w := httptest.NewRecorder()
+			filterHandler(w, req)
+			if w.Code != http.StatusOK {
+				t.Errorf("%s: status=%d want 200; body=%s", tc.entity, w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestGenerateDataFunctions(t *testing.T) {
 	if client == nil {
 		t.Skip("ent client not initialized")
