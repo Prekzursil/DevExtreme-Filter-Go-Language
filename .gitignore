@@ -2,6 +2,8 @@
 .remember/
 *.exe
 *.log
+*.pyc
+__pycache__/
 coverage/
 coverage.out
 coverage.xml
