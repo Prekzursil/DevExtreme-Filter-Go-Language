@@ -105,6 +105,7 @@ func TestEvaluateCondition_Time(t *testing.T) {
 		{">=", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", true},
 		{"<", "2024-01-01T00:00:00Z", "2024-06-01T00:00:00Z", true},
 		{"<=", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", true},
+		{"unknownop", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", false},
 		{"=", "notadate", "2024-01-01T00:00:00Z", false},
 		{"=", "2024-01-01T00:00:00Z", "bad", false},
 	}
@@ -113,5 +114,31 @@ func TestEvaluateCondition_Time(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("time %s %v %v: got %v, want %v", tc.op, tc.rec, tc.filter, got, tc.want)
 		}
+	}
+}
+
+func TestEvaluateCondition_UnknownFieldType(t *testing.T) {
+	if evaluateCondition(1, "=", 1, "something-unknown") {
+		t.Error("unknown field type should return false")
+	}
+}
+
+func TestEvalNumericOp_UnknownOp(t *testing.T) {
+	if evalNumericOp(1, 2, "unknownop") {
+		t.Error("unknown numeric op should return false")
+	}
+}
+
+func TestCoerceToFloat64_FmtSprintfFallback(t *testing.T) {
+	// Pass a custom type that has no direct match, but whose fmt.Sprintf
+	// representation parses as a float. Bool's "%v" is "true"/"false" which
+	// won't parse — good for the else branch.
+	if _, ok := coerceToFloat64(true); ok {
+		t.Error("bool should fall through and fail")
+	}
+	// struct whose fmt "%v" gives "{123}" — won't parse either.
+	type hasInt struct{ x int }
+	if _, ok := coerceToFloat64(hasInt{123}); ok {
+		t.Error("struct should fail coercion")
 	}
 }
