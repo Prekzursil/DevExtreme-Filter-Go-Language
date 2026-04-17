@@ -1,9 +1,6 @@
 name: codeql
 
-permissions:
-  actions: read
-  contents: read
-  security-events: write
+permissions: {}
 
 on:
   push:
@@ -61,6 +58,7 @@ jobs:
     needs: analyze
     if: ${{ always() }}
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Verify analyses succeeded
         run: |
