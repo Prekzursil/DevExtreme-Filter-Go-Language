@@ -9,3 +9,9 @@ coverage.out
 coverage.xml
 tests.exe
 test_output.log
+.qlty/logs
+.qlty/out
+.qlty/plugin_cachedir
+.qlty/results
+.qlty/configs
+.qlty/sources
