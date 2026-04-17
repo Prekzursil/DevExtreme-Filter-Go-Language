@@ -264,36 +264,36 @@ func TestAndOrNotPredicates(t *testing.T) {
 	p1, _ := ad.GetPredicateForField("count", "=", 1)
 	p2, _ := ad.GetPredicateForField("count", "=", 2)
 
-	if p := ad.GetAndPredicate(); p != nil {
+	if ad.GetAndPredicate() != nil {
 		t.Error("AND with no predicates should return nil")
 	}
-	if p := ad.GetAndPredicate(nil); p != nil {
+	if ad.GetAndPredicate(nil) != nil {
 		t.Error("AND with only nil should return nil")
 	}
-	if p := ad.GetAndPredicate(p1); p == nil {
+	if ad.GetAndPredicate(p1) == nil {
 		t.Error("AND with one should return it")
 	}
-	if p := ad.GetAndPredicate(p1, p2); p == nil {
+	if ad.GetAndPredicate(p1, p2) == nil {
 		t.Error("AND with two should return combined")
 	}
 
-	if p := ad.GetOrPredicate(); p != nil {
+	if ad.GetOrPredicate() != nil {
 		t.Error("OR with no predicates should return nil")
 	}
-	if p := ad.GetOrPredicate(nil); p != nil {
+	if ad.GetOrPredicate(nil) != nil {
 		t.Error("OR with only nil should return nil")
 	}
-	if p := ad.GetOrPredicate(p1); p == nil {
+	if ad.GetOrPredicate(p1) == nil {
 		t.Error("OR with one should return it")
 	}
-	if p := ad.GetOrPredicate(p1, p2); p == nil {
+	if ad.GetOrPredicate(p1, p2) == nil {
 		t.Error("OR with two should return combined")
 	}
 
-	if p := ad.GetNotPredicate(nil); p != nil {
+	if ad.GetNotPredicate(nil) != nil {
 		t.Error("NOT of nil should return nil")
 	}
-	if p := ad.GetNotPredicate(p1); p == nil {
+	if ad.GetNotPredicate(p1) == nil {
 		t.Error("NOT of predicate should return non-nil")
 	}
 }

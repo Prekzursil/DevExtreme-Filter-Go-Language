@@ -327,7 +327,7 @@ func handleDynamicFilter(w http.ResponseWriter, r *http.Request, tableName strin
 	}
 	filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
 	if errFilter != nil {
-		log.Printf("Error filtering data (path validated): %v", errFilter)
+		log.Print("Error filtering data for dynamic table (path validated, filter error suppressed)")
 		http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
 		return
 	}

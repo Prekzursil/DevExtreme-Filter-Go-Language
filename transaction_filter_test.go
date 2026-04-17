@@ -10,6 +10,8 @@ import (
 
 	"transaction-filter-backend/ent"
 
+	// Blank import registers the sqlite3 driver with database/sql so
+	// ent.Open("sqlite3", ...) resolves in TestMain.
 	_ "github.com/mattn/go-sqlite3"
 )
 
