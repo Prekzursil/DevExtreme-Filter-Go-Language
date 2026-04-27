@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"transaction-filter-backend/loghelper"
 	"transaction-filter-backend/dynamictablefilter"
 	"transaction-filter-backend/ent"
 	"transaction-filter-backend/schematool"
@@ -36,10 +37,10 @@ func init() {
 	for _, entityName := range entitiesToRegister {
 		adapter, errAdapter := NewGenericEntAdapter(entityName)
 		if errAdapter != nil {
-			log.Printf("Warning: Failed to create generic adapter for %s: %v. This entity might not be filterable.", entityName, errAdapter)
+			log.Printf("Warning: Failed to create generic adapter for %s: %v. This entity might not be filterable.", loghelper.Safe(entityName), errAdapter)
 		} else {
 			RegisterAdapter(entityName, adapter)
-			log.Printf("Successfully registered generic adapter for entity: %s", entityName)
+			log.Printf("Successfully registered generic adapter for entity: %s", loghelper.Safe(entityName))
 		}
 	}
 }
@@ -148,16 +149,16 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing 'entity' field in request body", http.StatusBadRequest)
 		return
 	}
-	log.Printf("Backend: Decoded request for entity '%s', filter: %+v", requestBody.Entity, requestBody.Filter)
+	log.Printf("Backend: Decoded request for entity %q, filter: %+v", requestBody.Entity, requestBody.Filter)
 	adapter, err := GetAdapter(requestBody.Entity)
 	if err != nil {
-		log.Printf("Backend: Failed to get adapter for entity '%s': %v", requestBody.Entity, err)
+		log.Printf("Backend: Failed to get adapter for entity %q: %v", requestBody.Entity, err)
 		http.Error(w, fmt.Sprintf("No adapter for entity '%s'", requestBody.Entity), http.StatusBadRequest)
 		return
 	}
 	finalPredicateAsSqlP, err := ParseFilterToPredicates(adapter, requestBody.Filter) // This now returns *sql.Predicate
 	if err != nil {
-		log.Printf("Backend: Error parsing filter for entity '%s': %v", requestBody.Entity, err)
+		log.Printf("Backend: Error parsing filter for entity %q: %v", requestBody.Entity, err)
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -210,12 +211,12 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		results, queryError = query.All(ctx)
 	default:
-		log.Printf("Backend: Unsupported entity type for filtering: %s", requestBody.Entity)
+		log.Printf("Backend: Unsupported entity type for filtering: %q", requestBody.Entity)
 		http.Error(w, fmt.Sprintf("Unsupported entity type: %s", requestBody.Entity), http.StatusBadRequest)
 		return
 	}
 	if queryError != nil {
-		log.Printf("Backend: Error executing query for entity '%s': %v", requestBody.Entity, queryError)
+		log.Printf("Backend: Error executing query for entity %q: %v", requestBody.Entity, queryError)
 		http.Error(w, fmt.Sprintf("Error executing query: %v", queryError), http.StatusInternalServerError)
 		return
 	}
@@ -289,7 +290,7 @@ func main() {
 		if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
 			schema, err := dynamictablefilter.LoadTableSchema(tableName)
 			if err != nil {
-				log.Printf("Error loading schema for dynamic table %s: %v", tableName, err)
+				log.Printf("Error loading schema for dynamic table %q: %v", tableName, err)
 				if os.IsNotExist(err) {
 					http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
 				} else {
@@ -307,25 +308,25 @@ func main() {
 			}
 			decoder := json.NewDecoder(r.Body)
 			if err := decoder.Decode(&requestBody); err != nil {
-				log.Printf("Error decoding filter request for dynamic table %s: %v", tableName, err)
+				log.Printf("Error decoding filter request for dynamic table %q: %v", tableName, err)
 				http.Error(w, "Invalid request body", http.StatusBadRequest)
 				return
 			}
 			schema, errSchema := dynamictablefilter.LoadTableSchema(tableName)
 			if errSchema != nil {
-				log.Printf("Error loading schema for dynamic table %s during filter: %v", tableName, errSchema)
+				log.Printf("Error loading schema for dynamic table %q during filter: %v", tableName, errSchema)
 				http.Error(w, "Schema not found for table "+tableName, http.StatusInternalServerError)
 				return
 			}
 			tableData, errData := dynamictablefilter.LoadTableData(tableName)
 			if errData != nil {
-				log.Printf("Error loading data for dynamic table %s during filter: %v", tableName, errData)
+				log.Printf("Error loading data for dynamic table %q during filter: %v", tableName, errData)
 				http.Error(w, "Data not found for table "+tableName, http.StatusInternalServerError)
 				return
 			}
 			filteredData, errFilter := dynamictablefilter.FilterDynamicData(tableData, schema, requestBody.Filter)
 			if errFilter != nil {
-				log.Printf("Error filtering data for dynamic table %s: %v", tableName, errFilter)
+				log.Printf("Error filtering data for dynamic table %q: %v", tableName, errFilter)
 				http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
 				return
 			}

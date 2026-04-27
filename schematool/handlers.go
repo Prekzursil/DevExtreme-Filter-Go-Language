@@ -66,9 +66,9 @@ func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
-		log.Printf("Error writing schema definition file %s: %v", filePath, err)
+		log.Printf("Error writing schema definition file %q: %v", filePath, err)
 	} else {
-		log.Printf("Saved schema definition to %s", filePath)
+		log.Printf("Saved schema definition to %q", filePath)
 	}
 }
 
@@ -124,7 +124,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		if os.IsNotExist(err) {
 			http.Error(w, fmt.Sprintf("Schema definition '%s' not found", name), http.StatusNotFound)
 		} else {
-			log.Printf("Error reading schema definition file %s: %v", filePath, err)
+			log.Printf("Error reading schema definition file %q: %v", filePath, err)
 			http.Error(w, "Failed to read schema definition", http.StatusInternalServerError)
 		}
 		return
@@ -132,7 +132,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var schemaReq SchemaRequest
 	if err := json.Unmarshal(fileData, &schemaReq); err != nil {
-		log.Printf("Error unmarshalling schema definition file %s: %v", filePath, err)
+		log.Printf("Error unmarshalling schema definition file %q: %v", filePath, err)
 		http.Error(w, "Invalid schema definition file format", http.StatusInternalServerError)
 		return
 	}

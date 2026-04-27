@@ -24,6 +24,30 @@ func GetBaseTablesPath() string {
 	return currentBaseTablesPath
 }
 
+// safeJoinUnderBase joins ``parts`` onto ``currentBaseTablesPath`` and returns
+// the cleaned path only if it stays inside the base directory. Returns an
+// error if ``tableName`` (or any ``parts`` element) contains path-traversal
+// characters that would escape ``currentBaseTablesPath``. This is the
+// CWE-22 path-injection mitigation that ``CodeQL go/path-injection`` and
+// ``gosecurity:S2083`` flag at the call sites of ``filepath.Join`` with
+// user-supplied ``tableName`` values.
+func safeJoinUnderBase(parts ...string) (string, error) {
+	candidate := filepath.Join(append([]string{currentBaseTablesPath}, parts...)...)
+	cleanedBase, err := filepath.Abs(filepath.Clean(currentBaseTablesPath))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve base path: %w", err)
+	}
+	cleanedCandidate, err := filepath.Abs(filepath.Clean(candidate))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve candidate path: %w", err)
+	}
+	rel, err := filepath.Rel(cleanedBase, cleanedCandidate)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+		return "", fmt.Errorf("path escapes base directory: %s", filepath.Join(parts...))
+	}
+	return cleanedCandidate, nil
+}
+
 type TableSchema struct {
 	EntityName string                                      `json:"entityName"`
 	Fields     []schematool.SchemaFieldDefinition          `json:"fields"`
@@ -31,7 +55,10 @@ type TableSchema struct {
 }
 
 func LoadTableSchema(tableName string) (*TableSchema, error) {
-	schemaPath := filepath.Join(currentBaseTablesPath, tableName, "schema.json") // Use var
+	schemaPath, err := safeJoinUnderBase(tableName, "schema.json")
+	if err != nil {
+		return nil, fmt.Errorf("invalid tableName for schema: %w", err)
+	}
 	data, err := ioutil.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
@@ -48,7 +75,10 @@ func LoadTableSchema(tableName string) (*TableSchema, error) {
 }
 
 func LoadTableData(tableName string) ([]map[string]interface{}, error) {
-	dataPath := filepath.Join(currentBaseTablesPath, tableName, "data.json") // Use var
+	dataPath, err := safeJoinUnderBase(tableName, "data.json")
+	if err != nil {
+		return nil, fmt.Errorf("invalid tableName for data: %w", err)
+	}
 	data, err := ioutil.ReadFile(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data file %s: %w", dataPath, err)

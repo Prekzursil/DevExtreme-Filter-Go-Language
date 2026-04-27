@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"strconv"
 	"strings"
 	"time" // Needed for timeOperatorHandlers
@@ -100,8 +99,6 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 
 		switch fieldSchema.Type {
 		case "int":
-			log.Printf("DEBUG: 'between' int, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' int, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
 			lower, errL := convertToInt(valueSlice[0])
 			if errL != nil {
 				return nil, fmt.Errorf("invalid lower bound for 'between' on int field %s: %w", field, errL)
@@ -112,8 +109,6 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 			}
 			return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 		case "float64":
-			log.Printf("DEBUG: 'between' float64, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' float64, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
 			lower, errL := convertToFloat64(valueSlice[0])
 			if errL != nil {
 				return nil, fmt.Errorf("invalid lower bound for 'between' on float field %s: %w", field, errL)
@@ -124,8 +119,6 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 			}
 			return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 		case "time.Time":
-			log.Printf("DEBUG: 'between' time.Time, valueSlice[0] type: %T, value: %+v", valueSlice[0], valueSlice[0])
-			log.Printf("DEBUG: 'between' time.Time, valueSlice[1] type: %T, value: %+v", valueSlice[1], valueSlice[1])
 			lower, errL := convertToTime(valueSlice[0])
 			if errL != nil {
 				return nil, fmt.Errorf("invalid lower bound for 'between' on time field %s: %w", field, errL)
