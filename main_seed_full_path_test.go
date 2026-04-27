@@ -13,6 +13,18 @@ import (
 // the existing > 0 short-circuit doesn't fire, exercising the actual
 // generateTransactions / generateTest{1,2,3}SchemaData calls. After the
 // test we restore the original client so other tests are unaffected.
+// TestSeedDatabase_NilClientReturnsError drives the nil-client error
+// branch in seedDatabase (now returning an error instead of log.Fatal).
+func TestSeedDatabase_NilClientReturnsError(t *testing.T) {
+	originalClient := client
+	client = nil
+	defer func() { client = originalClient }()
+
+	if err := seedDatabase(context.Background()); err == nil {
+		t.Error("expected error when ent client is nil")
+	}
+}
+
 func TestSeedDatabase_FullSeedPath(t *testing.T) {
 	freshClient, err := ent.Open("sqlite3", "file:ent_seed_full?mode=memory&cache=shared&_fk=1")
 	if err != nil {
@@ -30,7 +42,9 @@ func TestSeedDatabase_FullSeedPath(t *testing.T) {
 		}
 	}()
 
-	seedDatabase(context.Background())
+	if err := seedDatabase(context.Background()); err != nil {
+		t.Fatalf("seedDatabase returned unexpected error: %v", err)
+	}
 
 	count, err := client.Transaction.Query().Count(context.Background())
 	if err != nil {

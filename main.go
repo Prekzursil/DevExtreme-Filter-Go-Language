@@ -61,11 +61,14 @@ func main() {
 }
 
 // bootstrapAndServe is the testable bootstrap helper for main(). Returns
-// the listen error so tests can call it with a port that fails to bind
-// without crashing the test process via log.Fatal.
+// the bootstrap or listen error so tests can call it with a port that
+// fails to bind, or a nil client, without crashing the test process via
+// log.Fatal.
 func bootstrapAndServe(addr string) error {
 	_, handler := buildHTTPHandlers()
-	seedDatabase(context.Background())
+	if err := seedDatabase(context.Background()); err != nil {
+		return err
+	}
 	fmt.Println("Go backend server listening on " + addr)
 	fmt.Println("React App (Filter UI) available at http://localhost" + addr + "/")
 	fmt.Println("Schema editor available at http://localhost" + addr + "/schema-editor")
@@ -73,23 +76,26 @@ func bootstrapAndServe(addr string) error {
 }
 
 // seedDatabase creates the ent schema and populates seed data. Idempotent:
-// if records already exist (e.g. a TestMain pre-seeded the in-memory client),
-// the seed call is a no-op so calling seedDatabase from tests doesn't violate
-// unique constraints. Extracted from main() for testability.
-func seedDatabase(ctx context.Context) {
+// if records already exist (e.g. a TestMain pre-seeded the in-memory
+// client), the seed call is a no-op so calling seedDatabase from tests
+// doesn't violate unique constraints. Returns an error instead of
+// log.Fatal so the failure modes (nil client, Schema.Create failure)
+// are testable.
+func seedDatabase(ctx context.Context) error {
 	if client == nil {
-		log.Fatal("Ent client failed to initialize")
+		return fmt.Errorf("ent client failed to initialize")
 	}
 	if err := client.Schema.Create(ctx); err != nil {
-		log.Fatalf("failed creating schema resources: %v", err)
+		return fmt.Errorf("failed creating schema resources: %w", err)
 	}
 	if existing, _ := client.Transaction.Query().Count(ctx); existing > 0 {
-		return
+		return nil
 	}
 	generateTransactions(100, ctx)
 	generateTest1SchemaData(100, ctx)
 	generateTest2SchemaData(100, ctx)
 	generateTest3SchemaData(100, ctx)
+	return nil
 }
 
 // buildHTTPHandlers constructs the mux + CORS-wrapped handler. Extracted
