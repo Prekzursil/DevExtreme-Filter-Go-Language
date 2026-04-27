@@ -32,20 +32,29 @@ func TestApplyNotFilter_PropagatesNestedError(t *testing.T) {
 	}
 }
 
-func TestApplyGroupFilter_PropagatesNestedError(t *testing.T) {
+// expectFilterError runs applyFilterRecursive and asserts that an error
+// propagates. Extracting this helper kills a qlty-flagged 15-line code
+// duplication between TestApplyGroupFilter_PropagatesNestedError and
+// TestEvaluateGroupStep_PropagatesNestedRecursionError.
+func expectFilterError(t *testing.T, filter []interface{}, msg string) {
+	t.Helper()
 	schema := makeBranchSchema()
 	record := map[string]interface{}{"amount": 100}
-	// First sub-condition errors (unknown field), so applyGroupFilter must
-	// short-circuit with that error.
-	filter := []interface{}{
-		[]interface{}{"unknown", "=", 5},
-		"and",
-		[]interface{}{"amount", "=", 100},
+	if _, err := applyFilterRecursive(record, schema, filter); err == nil {
+		t.Error(msg)
 	}
-	_, err := applyFilterRecursive(record, schema, filter)
-	if err == nil {
-		t.Error("expected error to propagate from first failing sub-condition")
-	}
+}
+
+func TestApplyGroupFilter_PropagatesNestedError(t *testing.T) {
+	expectFilterError(t,
+		// First sub-condition errors (unknown field), so applyGroupFilter
+		// must short-circuit with that error.
+		[]interface{}{
+			[]interface{}{"unknown", "=", 5},
+			"and",
+			[]interface{}{"amount", "=", 100},
+		},
+		"expected error to propagate from first failing sub-condition")
 }
 
 func TestFoldGroupFilter_DanglingOperator(t *testing.T) {
@@ -93,19 +102,15 @@ func TestEvaluateGroupStep_RejectsNonArrayCondition(t *testing.T) {
 }
 
 func TestEvaluateGroupStep_PropagatesNestedRecursionError(t *testing.T) {
-	schema := makeBranchSchema()
-	record := map[string]interface{}{"amount": 100}
-	// Second sub-condition fails (unknown field), exercising the err path
-	// inside evaluateGroupStep's recursive call.
-	filter := []interface{}{
-		[]interface{}{"amount", "=", 100},
-		"and",
-		[]interface{}{"unknown", "=", 5},
-	}
-	_, err := applyFilterRecursive(record, schema, filter)
-	if err == nil {
-		t.Error("expected error from inner unknown-field in group step")
-	}
+	expectFilterError(t,
+		// Second sub-condition fails (unknown field), exercising the err
+		// path inside evaluateGroupStep's recursive call.
+		[]interface{}{
+			[]interface{}{"amount", "=", 100},
+			"and",
+			[]interface{}{"unknown", "=", 5},
+		},
+		"expected error from inner unknown-field in group step")
 }
 
 func TestFoldGroupFilter_RejectsInvalidOperator(t *testing.T) {
