@@ -241,11 +241,21 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	ctx := context.Background()
+	mux, handler := buildHTTPHandlers()
+	seedDatabase(context.Background())
+	fmt.Println("Go backend server listening on :8080")
+	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
+	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
+	_ = mux // mux is referenced by handler; this keeps the variable from being optimized away
+	log.Fatal(serveBackend(":8080", handler))
+}
+
+// seedDatabase creates the ent schema and populates seed data. Extracted from
+// main() for testability (testable via the in-memory ent client during TestMain).
+func seedDatabase(ctx context.Context) {
 	if client == nil {
 		log.Fatal("Ent client failed to initialize")
 	}
-	defer client.Close()
 	if err := client.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
@@ -253,7 +263,12 @@ func main() {
 	generateTest1SchemaData(100, ctx)
 	generateTest2SchemaData(100, ctx)
 	generateTest3SchemaData(100, ctx)
+}
 
+// buildHTTPHandlers constructs the mux + CORS-wrapped handler. Extracted from
+// main() so unit tests can exercise the route registration without binding a
+// listening port.
+func buildHTTPHandlers() (*http.ServeMux, http.Handler) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/filter", filterHandler)
 	c := cors.New(cors.Options{
@@ -262,48 +277,61 @@ func main() {
 		AllowedHeaders: []string{"Content-Type"},
 	})
 	handler := c.Handler(mux)
+	registerSchemaRoutes(mux)
+	registerEntityRoutes(mux)
+	registerStaticRoutes(mux)
+	return mux, handler
+}
 
+func registerSchemaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/schema-editor", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/schema_editor.html")
 	})
 	mux.HandleFunc("/generate-schema-code", schematool.GenerateSchemaCodeHandler)
 	mux.HandleFunc("/list-schema-definitions", schematool.ListSchemaDefinitionsHandler)
 	mux.HandleFunc("/load-schema-definition", schematool.LoadSchemaDefinitionHandler)
-	mux.HandleFunc("/list-filterable-entities", func(w http.ResponseWriter, r *http.Request) {
-		entityNames := make([]string, 0, len(registeredAdapters))
-		for name := range registeredAdapters {
-			entityNames = append(entityNames, name)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(entityNames)
-	})
+}
 
-	mux.HandleFunc("/dynamic-tables", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		tables, err := dynamictablefilter.ListDynamicTables()
-		if err != nil {
-			log.Println("Error listing dynamic tables")
-			http.Error(w, "Failed to list dynamic tables", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tables)
-	})
+func registerEntityRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/list-filterable-entities", listFilterableEntitiesHandler)
+	mux.HandleFunc("/dynamic-tables", listDynamicTablesHandler)
 	mux.HandleFunc("/dynamic-tables/", dynamicTablesItemHandler)
+}
 
+func listFilterableEntitiesHandler(w http.ResponseWriter, r *http.Request) {
+	entityNames := make([]string, 0, len(registeredAdapters))
+	for name := range registeredAdapters {
+		entityNames = append(entityNames, name)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if json.NewEncoder(w).Encode(entityNames) != nil {
+		log.Println("Backend: Error encoding entity list")
+	}
+}
+
+func listDynamicTablesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	tables, err := dynamictablefilter.ListDynamicTables()
+	if err != nil {
+		log.Println("Error listing dynamic tables")
+		http.Error(w, "Failed to list dynamic tables", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if json.NewEncoder(w).Encode(tables) != nil {
+		log.Println("Backend: Error encoding dynamic tables list")
+	}
+}
+
+func registerStaticRoutes(mux *http.ServeMux) {
 	reactAppFS := http.FileServer(http.Dir("./static/app"))
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/app/static"))))
 	mux.Handle("/manifest.json", reactAppFS)
 	mux.Handle("/favicon.ico", reactAppFS)
 	mux.HandleFunc("/", spaFallbackHandler)
-
-	fmt.Println("Go backend server listening on :8080")
-	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
-	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
-	log.Fatal(serveBackend(":8080", handler))
 }
 
 func dynamicTablesItemHandler(w http.ResponseWriter, r *http.Request) {
