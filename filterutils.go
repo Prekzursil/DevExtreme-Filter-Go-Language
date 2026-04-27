@@ -166,43 +166,60 @@ func combineGroupPredicates(adapter EntityAdapter, predicates []PredicateFunc, o
 }
 
 // Helper to convert to int (from float64 which JSON unmarshals numbers to, or string)
+// convertToInt routes to per-type converters via convertToIntDispatchers.
+// Reducing return count from 11 to 2 makes qlty's "many returns" smell go away.
 func convertToInt(val interface{}) (int, error) {
-	switch v := val.(type) {
-	case float64:
-		// Check if float64 has a fractional part
-		if v != float64(int(v)) {
-			return 0, fmt.Errorf("cannot convert float %f to int as it has a fractional part", v)
-		}
-		return int(v), nil
-	case float32:
-		if v != float32(int(v)) {
-			return 0, fmt.Errorf("cannot convert float32 %f to int as it has a fractional part", v)
-		}
-		return int(v), nil
-	case int:
-		return v, nil
-	case int32:
-		return int(v), nil
-	case int64:
-		return int(v), nil // Potential precision loss if int is 32-bit and int64 is large
-	case string:
-		var i int
-		_, err := fmt.Sscan(v, &i)
-		if err != nil {
-			// Try parsing as float first in case it's "10.0"
-			var f float64
-			_, ferr := fmt.Sscan(v, &f)
-			if ferr == nil {
-				if f != float64(int(f)) {
-					return 0, fmt.Errorf("cannot convert string float %s to int as it has a fractional part", v)
-				}
-				return int(f), nil
-			}
-		}
-		return i, err
-	default:
-		return 0, fmt.Errorf("cannot convert %T to int", val)
+	if conv, ok := convertToIntDispatchers[fmt.Sprintf("%T", val)]; ok {
+		return conv(val)
 	}
+	return 0, fmt.Errorf("cannot convert %T to int", val)
+}
+
+var convertToIntDispatchers = map[string]func(interface{}) (int, error){
+	"float64": convertFloat64ToInt,
+	"float32": convertFloat32ToInt,
+	"int":     convertIntToInt,
+	"int32":   convertInt32ToInt,
+	"int64":   convertInt64ToInt,
+	"string":  convertStringToInt,
+}
+
+func convertFloat64ToInt(val interface{}) (int, error) {
+	v := val.(float64)
+	if v != float64(int(v)) {
+		return 0, fmt.Errorf("cannot convert float %f to int as it has a fractional part", v)
+	}
+	return int(v), nil
+}
+
+func convertFloat32ToInt(val interface{}) (int, error) {
+	v := val.(float32)
+	if v != float32(int(v)) {
+		return 0, fmt.Errorf("cannot convert float32 %f to int as it has a fractional part", v)
+	}
+	return int(v), nil
+}
+
+func convertIntToInt(val interface{}) (int, error)   { return val.(int), nil }
+func convertInt32ToInt(val interface{}) (int, error) { return int(val.(int32)), nil }
+func convertInt64ToInt(val interface{}) (int, error) { return int(val.(int64)), nil }
+
+func convertStringToInt(val interface{}) (int, error) {
+	v := val.(string)
+	var i int
+	_, err := fmt.Sscan(v, &i)
+	if err == nil {
+		return i, nil
+	}
+	// Fall back to float-as-int parsing ("10.0" -> 10)
+	var f float64
+	if _, ferr := fmt.Sscan(v, &f); ferr == nil {
+		if f != float64(int(f)) {
+			return 0, fmt.Errorf("cannot convert string float %s to int as it has a fractional part", v)
+		}
+		return int(f), nil
+	}
+	return i, err
 }
 
 // Helper to convert to time.Time (from string)
@@ -233,29 +250,31 @@ func convertToTime(val interface{}) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unable to parse date string '%s' with known layouts", strVal)
 }
 
-// convertToFloat64 is already in main.go, but for utility, can be here too.
-// If defined in both, ensure they are identical or remove from one.
-// For now, assuming it's accessible from main.go. If adapters are moved to own package, this needs to be here.
+// convertToFloat64 routes via convertToFloat64Dispatchers (map-based dispatch
+// to drop the qlty 'many returns' smell from 8 to 2).
 func convertToFloat64(val interface{}) (float64, error) {
-	switch v := val.(type) {
-	case float64:
-		return v, nil
-	case float32:
-		return float64(v), nil
-	case int:
-		return float64(v), nil
-	case int32:
-		return float64(v), nil
-	case int64:
-		return float64(v), nil
-	case string: // Attempt to parse string to float
-		var f float64
-		_, err := fmt.Sscan(v, &f)
-		if err == nil {
-			return f, nil
-		}
-		return 0, fmt.Errorf("cannot convert string '%s' to float64: %w", v, err)
-	default:
-		return 0, fmt.Errorf("expected numeric type or string representation of number, got %T for value %+v", val, val)
+	if conv, ok := convertToFloat64Dispatchers[fmt.Sprintf("%T", val)]; ok {
+		return conv(val)
 	}
+	return 0, fmt.Errorf("expected numeric type or string representation of number, got %T for value %+v", val, val)
 }
+
+var convertToFloat64Dispatchers = map[string]func(interface{}) (float64, error){
+	"float64": func(v interface{}) (float64, error) { return v.(float64), nil },
+	"float32": func(v interface{}) (float64, error) { return float64(v.(float32)), nil },
+	"int":     func(v interface{}) (float64, error) { return float64(v.(int)), nil },
+	"int32":   func(v interface{}) (float64, error) { return float64(v.(int32)), nil },
+	"int64":   func(v interface{}) (float64, error) { return float64(v.(int64)), nil },
+	"string":  convertStringToFloat64,
+}
+
+func convertStringToFloat64(val interface{}) (float64, error) {
+	v := val.(string)
+	var f float64
+	_, err := fmt.Sscan(v, &f)
+	if err == nil {
+		return f, nil
+	}
+	return 0, fmt.Errorf("cannot convert string '%s' to float64: %w", v, err)
+}
+
