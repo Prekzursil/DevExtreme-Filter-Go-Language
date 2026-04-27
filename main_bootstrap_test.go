@@ -73,6 +73,16 @@ func TestRegisterEntityRoutes(t *testing.T) {
 	}
 }
 
+func TestBootstrapAndServe_ReturnsOnInvalidPort(t *testing.T) {
+	// Use port :99999 which is out-of-range and bind will fail.
+	// The helper builds handlers + seeds db, then tries to listen — that's where
+	// it errors out (instead of running indefinitely).
+	err := bootstrapAndServe(":99999")
+	if err == nil {
+		t.Error("expected listen error from invalid port")
+	}
+}
+
 func TestRegisterStaticRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	registerStaticRoutes(mux)

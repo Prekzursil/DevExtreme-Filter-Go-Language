@@ -241,23 +241,38 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	mux, handler := buildHTTPHandlers()
-	seedDatabase(context.Background())
-	fmt.Println("Go backend server listening on :8080")
-	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
-	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
-	_ = mux // mux is referenced by handler; this keeps the variable from being optimized away
-	log.Fatal(serveBackend(":8080", handler))
+	if err := bootstrapAndServe(":8080"); err != nil {
+		log.Fatal(err)
+	}
 }
 
-// seedDatabase creates the ent schema and populates seed data. Extracted from
-// main() for testability (testable via the in-memory ent client during TestMain).
+// bootstrapAndServe is the testable bootstrap helper for main(). Returns the
+// listen error so tests can call it with a port that fails to bind without
+// crashing the test process via log.Fatal.
+func bootstrapAndServe(addr string) error {
+	_, handler := buildHTTPHandlers()
+	seedDatabase(context.Background())
+	fmt.Println("Go backend server listening on " + addr)
+	fmt.Println("React App (Filter UI) available at http://localhost" + addr + "/")
+	fmt.Println("Schema editor available at http://localhost" + addr + "/schema-editor")
+	return serveBackend(addr, handler)
+}
+
+// seedDatabase creates the ent schema and populates seed data. Idempotent:
+// if records already exist (e.g., a TestMain pre-seeded the in-memory client),
+// the seed call is a no-op so calling seedDatabase from tests doesn't violate
+// unique constraints. Extracted from main() for testability.
 func seedDatabase(ctx context.Context) {
 	if client == nil {
 		log.Fatal("Ent client failed to initialize")
 	}
 	if err := client.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
+	}
+	// Skip seeding if rows already exist — keeps tests calling seedDatabase
+	// idempotent against TestMain's pre-seed.
+	if existing, _ := client.Transaction.Query().Count(ctx); existing > 0 {
+		return
 	}
 	generateTransactions(100, ctx)
 	generateTest1SchemaData(100, ctx)
