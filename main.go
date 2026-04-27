@@ -354,22 +354,42 @@ func main() {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static/app/static"))))
 	mux.Handle("/manifest.json", reactAppFS)
 	mux.Handle("/favicon.ico", reactAppFS)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/filter") ||
-			strings.HasPrefix(r.URL.Path, "/dynamic-tables") ||
-			strings.HasPrefix(r.URL.Path, "/schema-editor") ||
-			strings.HasPrefix(r.URL.Path, "/generate-schema-code") ||
-			strings.HasPrefix(r.URL.Path, "/list-schema-definitions") ||
-			strings.HasPrefix(r.URL.Path, "/load-schema-definition") ||
-			strings.HasPrefix(r.URL.Path, "/list-filterable-entities") {
-		}
-		http.ServeFile(w, r, "./static/app/index.html")
-	})
+	mux.HandleFunc("/", spaFallbackHandler)
 
 	fmt.Println("Go backend server listening on :8080")
 	fmt.Println("React App (Filter UI) available at http://localhost:8080/")
 	fmt.Println("Schema editor available at http://localhost:8080/schema-editor")
 	log.Fatal(serveBackend(":8080", handler))
+}
+
+// apiPathPrefixes are the URL prefixes whose dispatch is handled by other
+// mux handlers (filter, dynamic-tables, schema-editor, etc.). The SPA fallback
+// handler skips these so they aren't shadowed by the index.html serve.
+var apiPathPrefixes = []string{
+	"/filter",
+	"/dynamic-tables",
+	"/schema-editor",
+	"/generate-schema-code",
+	"/list-schema-definitions",
+	"/load-schema-definition",
+	"/list-filterable-entities",
+}
+
+// spaFallbackHandler serves the React app's index.html for any non-API path.
+// Extracted from main() to drop main's complexity below qlty's threshold and
+// to consolidate the long ``strings.HasPrefix || strings.HasPrefix || …``
+// chain into a clean loop.
+func spaFallbackHandler(w http.ResponseWriter, r *http.Request) {
+	for _, prefix := range apiPathPrefixes {
+		if strings.HasPrefix(r.URL.Path, prefix) {
+			// API paths are handled by their own mux handlers; if we reach
+			// here for an API prefix, the specific handler fell through, so
+			// 404 instead of serving index.html.
+			http.NotFound(w, r)
+			return
+		}
+	}
+	http.ServeFile(w, r, "./static/app/index.html")
 }
 
 // serveBackend starts the backend HTTP(S) listener. If both
