@@ -31,13 +31,17 @@ jobs:
         shell: bash
         run: |
           packages=$(go list ./... | grep -vE "/ent($|/)")
-          go test $packages -coverprofile=coverage.out -covermode=count || true
-          # Go's coverage profile prefixes paths with the module name
-          # (transaction-filter-backend/file.go). SonarCloud's Go scanner
-          # needs paths relative to sonar.sources=. (repo root), so strip
-          # the leading module prefix. Without this, new_coverage shows
-          # 0% even when go test reports 100% per-package coverage —
-          # Sonar can't map any of the file paths to actual sources.
+          # -coverpkg covers ALL listed packages from each test (without
+          # this, each package's tests only instrument its own files,
+          # missing cross-package coverage). The combined coverage.out
+          # is what SonarCloud reads.
+          coverpkg=$(echo "$packages" | tr '\n' ',' | sed 's/,$//')
+          go test $packages -coverprofile=coverage.out -covermode=count -coverpkg="$coverpkg" || true
+          # Strip the Go module-path prefix from coverage.out so
+          # SonarCloud's Go scanner can resolve paths against
+          # sonar.sources=. (repo root). Without this, new_coverage is
+          # 0% even when go test reports 100% per-package — Sonar
+          # can't map ``transaction-filter-backend/main.go`` to ``./main.go``.
           if [ -f coverage.out ]; then
             sed -i 's|^transaction-filter-backend/||' coverage.out
           fi
