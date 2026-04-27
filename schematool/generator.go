@@ -40,8 +40,9 @@ var GoKeywords = map[string]bool{
 }
 
 // SchemaDefinitionsDir is the directory where schema JSON files are saved,
-// relative to the execution path of the main application.
-const SchemaDefinitionsDir = "./schema_definitions"
+// relative to the execution path of the main application. It's a ``var`` so
+// tests can override it via ``t.TempDir()``.
+var SchemaDefinitionsDir = "./schema_definitions"
 
 type SchemaFieldDefinition struct {
 	Name string `json:"name"`
