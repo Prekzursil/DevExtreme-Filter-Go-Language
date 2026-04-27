@@ -32,6 +32,15 @@ jobs:
         run: |
           packages=$(go list ./... | grep -vE "/ent($|/)")
           go test $packages -coverprofile=coverage.out -covermode=count || true
+          # Go's coverage profile prefixes paths with the module name
+          # (transaction-filter-backend/file.go). SonarCloud's Go scanner
+          # needs paths relative to sonar.sources=. (repo root), so strip
+          # the leading module prefix. Without this, new_coverage shows
+          # 0% even when go test reports 100% per-package coverage —
+          # Sonar can't map any of the file paths to actual sources.
+          if [ -f coverage.out ]; then
+            sed -i 's|^transaction-filter-backend/||' coverage.out
+          fi
 
       - name: SonarCloud Scan
         # The 40-hex value after @ is the SonarSource sonarqube-scan-action's
