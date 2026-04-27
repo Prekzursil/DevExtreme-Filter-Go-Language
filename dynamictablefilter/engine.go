@@ -115,19 +115,18 @@ func ListDynamicTables() ([]string, error) {
 // complexity smell qlty flagged came from inlining all four type-switches
 // here; splitting one routing layer + four small evaluators drops complexity
 // from 44 to 6 per function.
+var fieldTypeEvaluators = map[string]func(recordVal interface{}, op string, filterVal interface{}) bool{
+	"string":    evaluateStringCondition,
+	"int":       evaluateIntCondition,
+	"float64":   evaluateFloat64Condition,
+	"bool":      evaluateBoolCondition,
+	"time.Time": evaluateTimeCondition,
+}
+
 func evaluateCondition(recordVal interface{}, op string, filterVal interface{}, fieldType string) bool {
 	op = strings.ToLower(op)
-	switch fieldType {
-	case "string":
-		return evaluateStringCondition(recordVal, op, filterVal)
-	case "int":
-		return evaluateIntCondition(recordVal, op, filterVal)
-	case "float64":
-		return evaluateFloat64Condition(recordVal, op, filterVal)
-	case "bool":
-		return evaluateBoolCondition(recordVal, op, filterVal)
-	case "time.Time":
-		return evaluateTimeCondition(recordVal, op, filterVal)
+	if eval, ok := fieldTypeEvaluators[fieldType]; ok {
+		return eval(recordVal, op, filterVal)
 	}
 	return false
 }
