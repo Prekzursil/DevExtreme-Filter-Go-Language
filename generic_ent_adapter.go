@@ -246,7 +246,11 @@ func buildTimePredicate(field, columnName, opLower string, val interface{}) (Pre
 	return nil, fmt.Errorf("unsupported operator '%s' for field type time.Time of field %s", opLower, field)
 }
 
-func (ga *GenericEntAdapter) GetAndPredicate(predicates ...PredicateFunc) PredicateFunc {
+// combinePredicates strips nil predicates, returns nil for empty input,
+// returns the single predicate when only one survives, and otherwise applies
+// ``combiner`` (sql.And or sql.Or). Extracting this shared body removes the
+// 15-line duplicated code block qlty + Sonar's CPD detector flagged.
+func combinePredicates(predicates []PredicateFunc, combiner func(...*sql.Predicate) *sql.Predicate) PredicateFunc {
 	validPreds := make([]*sql.Predicate, 0, len(predicates))
 	for _, p := range predicates {
 		if p != nil {
@@ -259,23 +263,15 @@ func (ga *GenericEntAdapter) GetAndPredicate(predicates ...PredicateFunc) Predic
 	if len(validPreds) == 1 {
 		return validPreds[0]
 	}
-	return sql.And(validPreds...)
+	return combiner(validPreds...)
+}
+
+func (ga *GenericEntAdapter) GetAndPredicate(predicates ...PredicateFunc) PredicateFunc {
+	return combinePredicates(predicates, sql.And)
 }
 
 func (ga *GenericEntAdapter) GetOrPredicate(predicates ...PredicateFunc) PredicateFunc {
-	validPreds := make([]*sql.Predicate, 0, len(predicates))
-	for _, p := range predicates {
-		if p != nil {
-			validPreds = append(validPreds, p)
-		}
-	}
-	if len(validPreds) == 0 {
-		return nil
-	}
-	if len(validPreds) == 1 {
-		return validPreds[0]
-	}
-	return sql.Or(validPreds...)
+	return combinePredicates(predicates, sql.Or)
 }
 
 func (ga *GenericEntAdapter) GetNotPredicate(p PredicateFunc) PredicateFunc {
