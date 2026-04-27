@@ -9,6 +9,75 @@ import (
 	"testing"
 )
 
+// TestSafeSchemaPath_AbsBaseError exercises the filepath.Abs failure on
+// the base path (covered via the filepathAbsForSchema indirection).
+func TestSafeSchemaPath_AbsBaseError(t *testing.T) {
+	originalAbs := filepathAbsForSchema
+	defer func() { filepathAbsForSchema = originalAbs }()
+	calls := 0
+	filepathAbsForSchema = func(p string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "", os.ErrInvalid
+		}
+		return originalAbs(p)
+	}
+	if _, err := safeSchemaPath("/tmp/base", "Foo"); err == nil {
+		t.Fatal("expected base resolution error to surface")
+	}
+}
+
+// TestSafeSchemaPath_AbsCandidateError covers the second filepath.Abs
+// failure path (resolving the candidate file).
+func TestSafeSchemaPath_AbsCandidateError(t *testing.T) {
+	originalAbs := filepathAbsForSchema
+	defer func() { filepathAbsForSchema = originalAbs }()
+	calls := 0
+	filepathAbsForSchema = func(p string) (string, error) {
+		calls++
+		if calls == 2 {
+			return "", os.ErrInvalid
+		}
+		return originalAbs(p)
+	}
+	if _, err := safeSchemaPath("/tmp/base", "Foo"); err == nil {
+		t.Fatal("expected candidate resolution error to surface")
+	}
+}
+
+// TestSafeSchemaPath_EscapeDetected forces the Rel-based containment
+// check to fail by returning an absolute candidate that resolves
+// outside the base. We accomplish this by making filepathAbsForSchema
+// rewrite the candidate to a sibling path.
+func TestSafeSchemaPath_EscapeDetected(t *testing.T) {
+	originalAbs := filepathAbsForSchema
+	defer func() { filepathAbsForSchema = originalAbs }()
+	filepathAbsForSchema = func(p string) (string, error) {
+		// Pretend the candidate ended up outside ``/safe/base`` so the
+		// filepath.Rel containment check returns a "..".
+		if filepath.Base(p) == "Foo.json" {
+			return "/elsewhere/Foo.json", nil
+		}
+		return "/safe/base", nil
+	}
+	if _, err := safeSchemaPath("/safe/base", "Foo"); err == nil {
+		t.Fatal("expected escape detection to surface as error")
+	}
+}
+
+// TestSafeSchemaPath_HappyPath drives the success branch so the function
+// reports 100% coverage.
+func TestSafeSchemaPath_HappyPath(t *testing.T) {
+	dir := t.TempDir()
+	got, err := safeSchemaPath(dir, "ValidName")
+	if err != nil {
+		t.Fatalf("expected success, got %v", err)
+	}
+	if !filepath.IsAbs(got) {
+		t.Errorf("expected absolute path, got %q", got)
+	}
+}
+
 // TestListSchemaDefinitionsHandler_DirMissing exercises the early-return
 // branch for "schema_definitions directory not yet created" (lines 140-142):
 // the handler responds 200 with an empty JSON list rather than a 500.
