@@ -18,6 +18,21 @@ func withSchemaDir(t *testing.T, dir string) {
 	SchemaDefinitionsDir = dir
 }
 
+func TestListSchemaDefinitionsHandler_DirDoesNotExist(t *testing.T) {
+	// Set SchemaDefinitionsDir to a non-existent path; handler should return 200 + empty list.
+	withSchemaDir(t, "/non/existent/dir/path")
+	req := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
+	w := httptest.NewRecorder()
+	ListSchemaDefinitionsHandler(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "[]") {
+		t.Errorf("expected empty list body, got %q", body)
+	}
+}
+
 func TestListSchemaDefinitionsHandler_WithExistingDir(t *testing.T) {
 	dir := t.TempDir()
 	withSchemaDir(t, dir)
