@@ -1,3 +1,4 @@
+// Package schematool provides HTTP handlers and code generators for dynamic schema management.
 package schematool
 
 import (
@@ -11,64 +12,94 @@ import (
 )
 
 // GenerateSchemaCodeHandler handles requests to generate schema and adapter code.
+//
+// Refactored from a 60-line, 6-return monolith into a thin HTTP entrypoint
+// that delegates to per-stage helpers (decode → respond → persist). Each
+// helper now stays under qlty's "many returns" threshold.
 func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	req, ok := decodeSchemaRequest(w, r)
+	if !ok {
+		return
+	}
+	if !writeGeneratedSchemaResponse(w, req) {
+		return
+	}
+	persistSchemaRequest(req)
+}
 
+func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (SchemaRequest, bool) {
 	var req SchemaRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
 		log.Printf("Error decoding /generate-schema-code request: %v", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
+		return SchemaRequest{}, false
 	}
+	return req, true
+}
 
-	log.Printf("Received /generate-schema-code request in schematool: %+v", req)
+// generateGoAdapterCodeFn is the indirection used by
+// writeGeneratedSchemaResponse. Tests override it to inject a synthetic
+// error so the previously-unreachable adapter-code error branch (lines
+// 54-58) is exercised. In practice GenerateGoSchemaCode and
+// GenerateGoAdapterCode share identical entity-name validation, so the
+// natural failure mode here can't be triggered without the stub.
+var generateGoAdapterCodeFn = GenerateGoAdapterCode
 
+func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool {
+	log.Printf("Received /generate-schema-code request in schematool")
 	goCode, err := GenerateGoSchemaCode(req)
 	if err != nil {
 		log.Printf("Error generating Go schema code: %v", err)
 		http.Error(w, fmt.Sprintf("Error generating schema code: %v", err), http.StatusInternalServerError)
-		return
+		return false
 	}
-
-	adapterCode, err := GenerateGoAdapterCode(req)
+	adapterCode, err := generateGoAdapterCodeFn(req)
 	if err != nil {
 		log.Printf("Error generating Go adapter code: %v", err)
 		http.Error(w, fmt.Sprintf("Error generating adapter code: %v", err), http.StatusInternalServerError)
-		return
+		return false
 	}
-
-	responsePayload := map[string]string{
+	payload := map[string]string{
 		"schemaCode":  goCode,
 		"adapterCode": adapterCode,
 	}
-
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(responsePayload); err != nil {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		log.Printf("Error encoding schema/adapter code response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		return false
 	}
+	return true
+}
 
-	// Save the schema definition (req) to a file
+// jsonMarshalIndentFn is the indirection used by persistSchemaRequest.
+// Tests override it to inject a synthetic marshal error so the
+// previously-unreachable MarshalIndent error branch (lines 79-82) is
+// exercised. In practice MarshalIndent only fails for non-marshalable
+// types (channels, functions, circular references) and SchemaRequest
+// is fully marshalable.
+var jsonMarshalIndentFn = json.MarshalIndent
+
+func persistSchemaRequest(req SchemaRequest) {
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Printf("Error creating schema_definitions directory: %v", err)
 		return
 	}
-
 	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
-	fileData, marshalErr := json.MarshalIndent(req, "", "  ")
+	fileData, marshalErr := jsonMarshalIndentFn(req, "", "  ")
 	if marshalErr != nil {
 		log.Printf("Error marshalling schema definition for saving: %v", marshalErr)
 		return
 	}
-
 	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
-		log.Printf("Error writing schema definition file %s: %v", filePath, err)
+		log.Printf("Error writing schema definition file %q: %v", filePath, err)
 	} else {
-		log.Printf("Saved schema definition to %s", filePath)
+		log.Printf("Saved schema definition to %q", filePath)
 	}
 }
 
@@ -117,14 +148,18 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing 'name' query parameter", http.StatusBadRequest)
 		return
 	}
+	if !isSafeSchemaName(name) {
+		http.Error(w, "Invalid 'name' query parameter", http.StatusBadRequest)
+		return
+	}
 
 	filePath := filepath.Join(SchemaDefinitionsDir, name+".json")
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			http.Error(w, fmt.Sprintf("Schema definition '%s' not found", name), http.StatusNotFound)
+			http.Error(w, "Schema definition not found", http.StatusNotFound)
 		} else {
-			log.Printf("Error reading schema definition file %s: %v", filePath, err)
+			log.Printf("Error reading schema definition file %q: %v", filePath, err)
 			http.Error(w, "Failed to read schema definition", http.StatusInternalServerError)
 		}
 		return
@@ -132,14 +167,33 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var schemaReq SchemaRequest
 	if err := json.Unmarshal(fileData, &schemaReq); err != nil {
-		log.Printf("Error unmarshalling schema definition file %s: %v", filePath, err)
+		log.Printf("Error unmarshalling schema definition file %q: %v", filePath, err)
 		http.Error(w, "Invalid schema definition file format", http.StatusInternalServerError)
 		return
 	}
 
+	// Re-encode the validated struct rather than streaming raw fileData. This
+	// removes a Semgrep go.lang.security.xss flag (raw w.Write of arbitrary
+	// bytes) and guarantees we only ever emit JSON that round-tripped through
+	// our schema, regardless of what's on disk.
 	w.Header().Set("Content-Type", "application/json")
-	_, err = w.Write(fileData)
-	if err != nil {
+	if err := json.NewEncoder(w).Encode(schemaReq); err != nil {
 		log.Printf("Error writing schema definition response: %v", err)
 	}
+}
+
+// isSafeSchemaName rejects names that could escape SchemaDefinitionsDir via
+// directory traversal. Only simple base-name characters are allowed; this
+// closes the path-injection surface flagged by gosecurity:S2083.
+func isSafeSchemaName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return false
+	}
+	if strings.Contains(name, "..") {
+		return false
+	}
+	return true
 }

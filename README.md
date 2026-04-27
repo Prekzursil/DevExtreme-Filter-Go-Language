@@ -1,6 +1,7 @@
 # DevExtreme Filter Go Language Backend
 
 This project provides a Go backend with a dynamic filtering API designed to work with DevExtreme components, enabling a rich filtering user experience. It supports filtering data from two types of sources:
+
 1.  **`ent`-backed entities:** Database tables managed by the `ent` ORM (using SQLite in-memory).
 2.  **File-based dynamic tables:** Tables whose schema and data are defined by JSON files on the filesystem.
 
@@ -40,10 +41,12 @@ This project provides a Go backend with a dynamic filtering API designed to work
 ## How to Use
 
 ### Prerequisites
+
 - Go (version 1.24.3 or higher)
 - Node.js and npm/yarn (only if you need to rebuild the React frontend from `Old Version/transaction-filter/`)
 
 ### Running the Application
+
 1.  **Ensure React Frontend is Built and Copied (if necessary):**
     *   The Go backend expects the built static assets of the React frontend to be located in `static/app/`. These are included in the repository.
     *   If you need to rebuild or modify the React app:
@@ -65,12 +68,14 @@ This project provides a Go backend with a dynamic filtering API designed to work
     *   The developer schema editor tool is available at `http://localhost:8080/schema-editor`.
 
 ### Using the Filter UI (React App at `/`)
+
 - Select an entity/table from the dropdown (e.g., "transaction (Ent)", "test1 (Dynamic)").
 - The DevExtreme FilterBuilder will load with fields relevant to the selected entity.
 - Construct your filter criteria using the UI.
 - The DataGrid below will display the filtered data.
 
 ### Adding New `ent`-backed Entities
+
 1.  Use the Schema Editor (`/schema-editor`) to generate the Go schema code for the new entity.
 2.  Save the schema file to `ent/schema/`.
 3.  Run `go generate ./...` in the `transaction-filter-backend/` directory.
@@ -82,11 +87,13 @@ This project provides a Go backend with a dynamic filtering API designed to work
 6.  Restart the Go server.
 
 ### Adding New File-Based Dynamic Tables
+
 1.  Create a new subdirectory in `tables/` (e.g., `tables/mynewdynamictable/`).
 2.  Inside this new directory, create `schema.json` and `data.json`.
 3.  Restart the Go server. The new table should appear in the dropdown.
 
 ## Technologies Used
+
 - Go 1.24.3
 - Ent ORM (`entgo.io/ent`)
 - SQLite (via `github.com/mattn/go-sqlite3`)

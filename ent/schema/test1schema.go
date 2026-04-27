@@ -1,3 +1,4 @@
+// Package schema defines the Ent schema models for in-memory test entities.
 package schema
 
 import (
