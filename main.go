@@ -32,13 +32,27 @@ var client *ent.Client
 var initialEntities = []string{"transaction", "test1schema", "test2schema", "test3schema"}
 
 func init() {
-	var err error
-	client, err = ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
-	if err != nil {
+	if err := openClient(); err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
 	registerAllAdapters(initialEntities)
 }
+
+// openClient opens the in-memory ent client. Extracted from init() so
+// the error branch is testable: a unit test can call openClient with
+// a stubbed entOpen that returns an error.
+func openClient() error {
+	c, err := entOpen("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
+	if err != nil {
+		return err
+	}
+	client = c
+	return nil
+}
+
+// entOpen is the indirection used by openClient. Tests override it via
+// the entOpenFor helper below.
+var entOpen = ent.Open
 
 // registerAllAdapters delegates to registerOneAdapter for each entity
 // name. Extracting the per-entity loop body into a separate function
