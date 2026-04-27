@@ -118,28 +118,40 @@ func (ga *GenericEntAdapter) buildBetweenPredicate(field, columnName, fieldType 
 	if !ok || len(valueSlice) != 2 {
 		return nil, fmt.Errorf("operator 'between' requires an array of two values, got %T for field %s", val, field)
 	}
-	switch fieldType {
-	case "int":
-		lower, upper, err := convertBetweenBoundsInt(valueSlice, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-	case "float64":
-		lower, upper, err := convertBetweenBoundsFloat(valueSlice, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-	case "time.Time":
-		lower, upper, err := convertBetweenBoundsTime(valueSlice, field)
-		if err != nil {
-			return nil, err
-		}
-		return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
-	default:
-		return nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldType, field)
+	if builder, found := betweenBuilders[fieldType]; found {
+		return builder(valueSlice, field, columnName)
 	}
+	return nil, fmt.Errorf("'between' operator not supported for field type %s of field %s", fieldType, field)
+}
+
+var betweenBuilders = map[string]func(values []interface{}, field, columnName string) (PredicateFunc, error){
+	"int":       betweenIntBuilder,
+	"float64":   betweenFloatBuilder,
+	"time.Time": betweenTimeBuilder,
+}
+
+func betweenIntBuilder(values []interface{}, field, columnName string) (PredicateFunc, error) {
+	lower, upper, err := convertBetweenBoundsInt(values, field)
+	if err != nil {
+		return nil, err
+	}
+	return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
+}
+
+func betweenFloatBuilder(values []interface{}, field, columnName string) (PredicateFunc, error) {
+	lower, upper, err := convertBetweenBoundsFloat(values, field)
+	if err != nil {
+		return nil, err
+	}
+	return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
+}
+
+func betweenTimeBuilder(values []interface{}, field, columnName string) (PredicateFunc, error) {
+	lower, upper, err := convertBetweenBoundsTime(values, field)
+	if err != nil {
+		return nil, err
+	}
+	return sql.And(sql.GTE(columnName, lower), sql.LTE(columnName, upper)), nil
 }
 
 func convertBetweenBoundsInt(values []interface{}, field string) (int, int, error) {

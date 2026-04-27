@@ -22,6 +22,12 @@ file_patterns = [
     # matches the existing exclusion in sonar-project.properties.
     "scripts/quality/**",
     "scripts/security_helpers.py",
+    # Minified, hash-named SPA bundles served by the Go backend. These are
+    # produced by the React build pipeline (Vite/Webpack), not authored here.
+    # The TS sources that generated them live in the upstream UI repo and are
+    # analyzed there. Smell metrics on minified output are pure noise.
+    "static/**",
+    "static/app/**",
 ]
 
 [smells]

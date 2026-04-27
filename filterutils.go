@@ -49,6 +49,18 @@ func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (Pr
 	if adapter == nil {
 		return nil, fmt.Errorf("entity adapter cannot be nil")
 	}
+	filterArray, err := coerceFilterArray(filterInput)
+	if err != nil || len(filterArray) == 0 {
+		return nil, err
+	}
+	return dispatchFilterByShape(adapter, filterArray)
+}
+
+// coerceFilterArray normalizes the raw filter input — nil → (nil, nil), an
+// already-typed []interface{} → (slice, nil), anything else → typed error.
+// Pulling these checks out of ParseFilterToPredicates drops its return count
+// below qlty's "many returns" threshold without changing behavior.
+func coerceFilterArray(filterInput interface{}) ([]interface{}, error) {
 	if filterInput == nil {
 		return nil, nil
 	}
@@ -56,16 +68,31 @@ func ParseFilterToPredicates(adapter EntityAdapter, filterInput interface{}) (Pr
 	if !ok {
 		return nil, fmt.Errorf("filter input is not an array, got %T", filterInput)
 	}
-	if len(filterArray) == 0 {
-		return nil, nil
-	}
-	if isParseNotFilter(filterArray) {
-		return parseNotFilter(adapter, filterArray)
-	}
-	if isParseSimpleCondition(filterArray) {
-		return parseSimpleCondition(adapter, filterArray)
+	return filterArray, nil
+}
+
+type filterParserFunc func(EntityAdapter, []interface{}) (PredicateFunc, error)
+
+// dispatchFilterByShape routes a parsed filter array to the matching parser.
+// Splitting the shape detection into matchFilterShape keeps each function's
+// return count below qlty's "many returns" threshold; declaring the matchers
+// inside a function avoids the package-level initialization cycle that would
+// arise from referring to parseNotFilter (which calls ParseFilterToPredicates).
+func dispatchFilterByShape(adapter EntityAdapter, filterArray []interface{}) (PredicateFunc, error) {
+	if parser := matchFilterShape(filterArray); parser != nil {
+		return parser(adapter, filterArray)
 	}
 	return parseGroupCondition(adapter, filterArray)
+}
+
+func matchFilterShape(filterArray []interface{}) filterParserFunc {
+	if isParseNotFilter(filterArray) {
+		return parseNotFilter
+	}
+	if isParseSimpleCondition(filterArray) {
+		return parseSimpleCondition
+	}
+	return nil
 }
 
 func isParseNotFilter(filterArray []interface{}) bool {
