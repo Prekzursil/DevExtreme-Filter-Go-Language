@@ -50,19 +50,30 @@ jobs:
               rm -f coverage_part.out
             fi
           done
-          # SonarCloud's Go scanner resolves file paths via the import
-          # path embedded in coverage.out lines (e.g.
-          # ``transaction-filter-backend/main.go``). KEEP the module
-          # prefix and rely on the project key + sonar.sources=. to
-          # let the scanner walk the import path back to disk. Stripping
-          # the prefix earlier produced \`time=37ms\` parser fast-paths
-          # that didn't apply any data.
           if [ -f coverage.out ]; then
             echo "=== coverage.out: $(wc -l < coverage.out) lines ==="
             head -3 coverage.out
-            echo "=== covered files ==="
-            awk '{print $1}' coverage.out | grep -oE '^[^:]+' | sort -u | head -10
           fi
+
+      - name: Convert to Sonar Generic Coverage XML
+        shell: bash
+        run: |
+          # SonarCloud's Go Cover sensor silently drops all hits (39ms
+          # parse, 0% applied) despite valid Go cover data with 100%
+          # statement coverage.  The likely cause is the module-prefix
+          # path resolver returning null for every indexed-file lookup.
+          # Generate Sonar Generic Test Coverage XML directly so the
+          # ``path`` attributes map 1:1 against indexed source files.
+          MODULE=$(go list -m)
+          echo "Go module: $MODULE"
+          python3 scripts/quality/gocover_to_sonar_generic.py \
+            --in coverage.out \
+            --module "$MODULE" \
+            --out coverage-sonar.xml
+          echo "=== coverage-sonar.xml preview ==="
+          head -30 coverage-sonar.xml
+          echo "=== file paths emitted ==="
+          grep -oE 'path="[^"]+"' coverage-sonar.xml | sort -u | head -20
 
       - name: SonarCloud Scan
         # The 40-hex value after @ is the SonarSource sonarqube-scan-action's
