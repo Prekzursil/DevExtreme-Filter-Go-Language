@@ -25,23 +25,40 @@ import (
 
 var client *ent.Client
 
+// initialEntities is the hard-coded list of entity names the binary
+// registers adapters for at startup. Pulled to a package var so tests
+// can exercise registerAllAdapters with both the real list (happy path)
+// and a list containing a non-existent entity (warning path).
+var initialEntities = []string{"transaction", "test1schema", "test2schema", "test3schema"}
+
 func init() {
 	var err error
 	client, err = ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	if err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
 	}
+	registerAllAdapters(initialEntities)
+}
 
-	entitiesToRegister := []string{"transaction", "test1schema", "test2schema", "test3schema"}
-	for _, entityName := range entitiesToRegister {
-		adapter, errAdapter := NewGenericEntAdapter(entityName)
-		if errAdapter != nil {
-			log.Println("Warning: Failed to create generic adapter. Entity might not be filterable.")
-		} else {
-			RegisterAdapter(entityName, adapter)
-			log.Println("Successfully registered generic adapter for entity")
-		}
+// registerAllAdapters delegates to registerOneAdapter for each entity
+// name. Extracting the per-entity loop body into a separate function
+// makes the warning branch (NewGenericEntAdapter failure for a
+// nonexistent entity) testable from a unit test that supplies a
+// nonexistent entity name in the input slice.
+func registerAllAdapters(names []string) {
+	for _, name := range names {
+		registerOneAdapter(name)
 	}
+}
+
+func registerOneAdapter(entityName string) {
+	adapter, errAdapter := NewGenericEntAdapter(entityName)
+	if errAdapter != nil {
+		log.Println("Warning: Failed to create generic adapter. Entity might not be filterable.")
+		return
+	}
+	RegisterAdapter(entityName, adapter)
+	log.Println("Successfully registered generic adapter for entity")
 }
 
 type Transaction struct {
