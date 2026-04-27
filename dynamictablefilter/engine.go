@@ -189,20 +189,18 @@ func evaluateFloat64Condition(recordVal interface{}, op string, filterVal interf
 	return numericCompare(fRecordVal, fFilterVal, op)
 }
 
+var numericComparators = map[string]func(r, f float64) bool{
+	"=":  func(r, f float64) bool { return r == f },
+	"<>": func(r, f float64) bool { return r != f },
+	">":  func(r, f float64) bool { return r > f },
+	">=": func(r, f float64) bool { return r >= f },
+	"<":  func(r, f float64) bool { return r < f },
+	"<=": func(r, f float64) bool { return r <= f },
+}
+
 func numericCompare(r, f float64, op string) bool {
-	switch op {
-	case "=":
-		return r == f
-	case "<>":
-		return r != f
-	case ">":
-		return r > f
-	case ">=":
-		return r >= f
-	case "<":
-		return r < f
-	case "<=":
-		return r <= f
+	if cmp, ok := numericComparators[op]; ok {
+		return cmp(r, f)
 	}
 	return false
 }
@@ -235,6 +233,15 @@ func parseTimeFromLayouts(value string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+var timeComparators = map[string]func(r, f time.Time) bool{
+	"=":  func(r, f time.Time) bool { return r.Equal(f) },
+	"<>": func(r, f time.Time) bool { return !r.Equal(f) },
+	">":  func(r, f time.Time) bool { return r.After(f) },
+	">=": func(r, f time.Time) bool { return r.After(f) || r.Equal(f) },
+	"<":  func(r, f time.Time) bool { return r.Before(f) },
+	"<=": func(r, f time.Time) bool { return r.Before(f) || r.Equal(f) },
+}
+
 func evaluateTimeCondition(recordVal interface{}, op string, filterVal interface{}) bool {
 	tRecordVal, ok := parseTimeFromLayouts(fmt.Sprintf("%v", recordVal))
 	if !ok {
@@ -244,19 +251,8 @@ func evaluateTimeCondition(recordVal interface{}, op string, filterVal interface
 	if !ok {
 		return false
 	}
-	switch op {
-	case "=":
-		return tRecordVal.Equal(tFilterVal)
-	case "<>":
-		return !tRecordVal.Equal(tFilterVal)
-	case ">":
-		return tRecordVal.After(tFilterVal)
-	case ">=":
-		return tRecordVal.After(tFilterVal) || tRecordVal.Equal(tFilterVal)
-	case "<":
-		return tRecordVal.Before(tFilterVal)
-	case "<=":
-		return tRecordVal.Before(tFilterVal) || tRecordVal.Equal(tFilterVal)
+	if cmp, ok := timeComparators[op]; ok {
+		return cmp(tRecordVal, tFilterVal)
 	}
 	return false
 }
