@@ -50,10 +50,14 @@ jobs:
               rm -f coverage_part.out
             fi
           done
-          # Strip the Go module-path prefix so SonarCloud's Go scanner
-          # can resolve paths against sonar.sources=. (repo root).
+          # SonarCloud's Go scanner resolves file paths via the import
+          # path embedded in coverage.out lines (e.g.
+          # ``transaction-filter-backend/main.go``). KEEP the module
+          # prefix and rely on the project key + sonar.sources=. to
+          # let the scanner walk the import path back to disk. Stripping
+          # the prefix earlier produced \`time=37ms\` parser fast-paths
+          # that didn't apply any data.
           if [ -f coverage.out ]; then
-            sed -i 's|^transaction-filter-backend/||' coverage.out
             echo "=== coverage.out: $(wc -l < coverage.out) lines ==="
             head -3 coverage.out
             echo "=== covered files ==="
