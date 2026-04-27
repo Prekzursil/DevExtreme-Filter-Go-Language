@@ -11,6 +11,15 @@ import (
 	"strings"
 )
 
+// Header / status / content-type literals reused across handlers; pulled to
+// constants so SonarCloud rule go:S1192 (duplicate string literal) stays at
+// zero. Centralising them also makes a policy change one-line.
+const (
+	headerContentType      = "Content-Type"
+	mimeApplicationJSON    = "application/json"
+	statusMethodNotAllowed = "Method not allowed"
+)
+
 // GenerateSchemaCodeHandler handles requests to generate schema and adapter code.
 //
 // Refactored from a 60-line, 6-return monolith into a thin HTTP entrypoint
@@ -18,7 +27,7 @@ import (
 // helper now stays under qlty's "many returns" threshold.
 func GenerateSchemaCodeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, statusMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 	req, ok := decodeSchemaRequest(w, r)
@@ -68,7 +77,7 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 		"schemaCode":  goCode,
 		"adapterCode": adapterCode,
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		log.Printf("Error encoding schema/adapter code response: %v", err)
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
@@ -86,6 +95,17 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 var jsonMarshalIndentFn = json.MarshalIndent
 
 func persistSchemaRequest(req SchemaRequest) {
+	// Reject EntityName values that could escape ``SchemaDefinitionsDir``
+	// before constructing the destination path. This closes the
+	// ``gosecurity:S2083`` (path injection from user-controlled data)
+	// surface that previously sat in ``filepath.Join(.., req.EntityName+".json")``.
+	if !isSafeSchemaName(req.EntityName) {
+		log.Printf(
+			"Refusing to persist schema definition with unsafe entity name: %q",
+			req.EntityName,
+		)
+		return
+	}
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Printf("Error creating schema_definitions directory: %v", err)
 		return
@@ -106,14 +126,14 @@ func persistSchemaRequest(req SchemaRequest) {
 // ListSchemaDefinitionsHandler lists saved schema definition files.
 func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, statusMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
 	files, err := os.ReadDir(SchemaDefinitionsDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set(headerContentType, mimeApplicationJSON)
 			json.NewEncoder(w).Encode([]string{})
 			return
 		}
@@ -129,7 +149,7 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(definitionNames); err != nil {
 		log.Printf("Error encoding definition names: %v", err)
 		http.Error(w, "Failed to encode definition names", http.StatusInternalServerError)
@@ -139,7 +159,7 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 // LoadSchemaDefinitionHandler loads a specific schema definition file.
 func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(w, statusMethodNotAllowed, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -176,7 +196,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 	// removes a Semgrep go.lang.security.xss flag (raw w.Write of arbitrary
 	// bytes) and guarantees we only ever emit JSON that round-tripped through
 	// our schema, regardless of what's on disk.
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(schemaReq); err != nil {
 		log.Printf("Error writing schema definition response: %v", err)
 	}

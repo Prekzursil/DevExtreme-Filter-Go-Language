@@ -15,10 +15,15 @@ import (
 	"transaction-filter-backend/ent"
 	"transaction-filter-backend/schematool"
 
+	// Blank imports register the per-table ent generated packages so their
+	// init() side-effects run on startup; without them the dynamic table
+	// dispatcher has no metadata to route filter requests against.
 	_ "transaction-filter-backend/ent/test1schema"
 	_ "transaction-filter-backend/ent/test2schema"
 	_ "transaction-filter-backend/ent/test3schema"
 
+	// Blank import registers the SQLite3 driver with database/sql so the
+	// ent client can dial ``sqlite3://...`` URIs at runtime.
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/cors"
 )

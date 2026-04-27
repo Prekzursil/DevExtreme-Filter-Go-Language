@@ -53,7 +53,9 @@
             <h2>Filtered Results</h2>
             <div class="table-wrapper">
                 <table id="resultsTable">
-                    <thead></thead>
+                    <thead>
+                        <tr><th scope="col">No data loaded yet</th></tr>
+                    </thead>
                     <tbody></tbody>
                 </table>
             </div>
@@ -221,7 +223,7 @@
                         <option value="notOr">NOT OR (not any in this group)</option>
                     </select>
                     <button type="button" onclick="addConditionToGroup('${groupId}')" class="add-condition-btn" style="margin-left:10px;">+ Condition</button>
-                    ${!isRoot ? `<button type="button" onclick="removeGroup('${groupId}')" class="remove-condition-btn">Remove Group</button>` : ''}
+                    ${isRoot ? '' : `<button type="button" onclick="removeGroup('${groupId}')" class="remove-condition-btn">Remove Group</button>`}
                 </div>
                 <div class="conditions-container" id="conditionsFor${groupId}"></div>
             `;
@@ -306,7 +308,7 @@
                     if (valInput.type === 'select-one' && valInput.id.startsWith('val_')) { // Boolean select
                         val = (val === 'true');
                     } else if (valInput.type === 'number' && val !== '') {
-                        val = parseFloat(val);
+                        val = Number.parseFloat(val);
                     } else if (valInput.type === 'datetime-local' && val !== '') {
                         try { val = new Date(val).toISOString(); } catch(e) { console.warn("Invalid date", e); /* keep as string */ }
                     }
@@ -337,8 +339,15 @@
             conditions.forEach((cond, index) => {
                 finalFilter.push(cond);
                 if (index < conditions.length - 1) {
-                    finalFilter.push(groupOperator === "notAnd" || groupOperator === "notOr" ? 
-                                     (groupOperator === "notAnd" ? "and" : "or") : groupOperator);
+                    let pushedOperator;
+                    if (groupOperator === "notAnd") {
+                        pushedOperator = "and";
+                    } else if (groupOperator === "notOr") {
+                        pushedOperator = "or";
+                    } else {
+                        pushedOperator = groupOperator;
+                    }
+                    finalFilter.push(pushedOperator);
                 }
             });
 
@@ -442,7 +451,14 @@
                     let cell = row.insertCell();
                     let value = item[header];
                     if (typeof value === 'string' && value.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-                        try { value = new Date(value).toLocaleString(); } catch (e) { /* ignore */ }
+                        try {
+                            value = new Date(value).toLocaleString();
+                        } catch (e) {
+                            // Fall back to the raw string when Date parsing
+                            // throws (e.g., locale-format mismatch); log so an
+                            // operator can correlate the source row.
+                            console.warn("Failed to format date value", value, e);
+                        }
                     }
                     cell.textContent = value === null || value === undefined ? "" : value;
                 });
