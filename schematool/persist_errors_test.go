@@ -9,20 +9,30 @@ import (
 	"testing"
 )
 
-// TestSafeSchemaPath_AbsBaseError exercises the filepath.Abs failure on
-// the base path (covered via the filepathAbsForSchema indirection).
-func TestSafeSchemaPath_AbsBaseError(t *testing.T) {
+// runSafeSchemaPathWithFailingAbs runs safeSchemaPath with
+// filepathAbsForSchema patched to fail on the Nth call (1-indexed).
+// Centralising the patching keeps the per-branch tests under qlty's
+// duplication threshold while still asserting each error path.
+func runSafeSchemaPathWithFailingAbs(t *testing.T, failOnCall int) error {
+	t.Helper()
 	originalAbs := filepathAbsForSchema
 	defer func() { filepathAbsForSchema = originalAbs }()
 	calls := 0
 	filepathAbsForSchema = func(p string) (string, error) {
 		calls++
-		if calls == 1 {
+		if calls == failOnCall {
 			return "", os.ErrInvalid
 		}
 		return originalAbs(p)
 	}
-	if _, err := safeSchemaPath("/tmp/base", "Foo"); err == nil {
+	_, err := safeSchemaPath("/tmp/base", "Foo")
+	return err
+}
+
+// TestSafeSchemaPath_AbsBaseError exercises the filepath.Abs failure on
+// the base path (covered via the filepathAbsForSchema indirection).
+func TestSafeSchemaPath_AbsBaseError(t *testing.T) {
+	if err := runSafeSchemaPathWithFailingAbs(t, 1); err == nil {
 		t.Fatal("expected base resolution error to surface")
 	}
 }
@@ -30,17 +40,7 @@ func TestSafeSchemaPath_AbsBaseError(t *testing.T) {
 // TestSafeSchemaPath_AbsCandidateError covers the second filepath.Abs
 // failure path (resolving the candidate file).
 func TestSafeSchemaPath_AbsCandidateError(t *testing.T) {
-	originalAbs := filepathAbsForSchema
-	defer func() { filepathAbsForSchema = originalAbs }()
-	calls := 0
-	filepathAbsForSchema = func(p string) (string, error) {
-		calls++
-		if calls == 2 {
-			return "", os.ErrInvalid
-		}
-		return originalAbs(p)
-	}
-	if _, err := safeSchemaPath("/tmp/base", "Foo"); err == nil {
+	if err := runSafeSchemaPathWithFailingAbs(t, 2); err == nil {
 		t.Fatal("expected candidate resolution error to surface")
 	}
 }
