@@ -330,6 +330,13 @@ func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filter
 	if err != nil {
 		return false, err
 	}
+	return foldGroupFilter(record, schema, filterGroup, currentMatch)
+}
+
+// foldGroupFilter walks the (op, cond) pairs of the group, folding each
+// sub-match into ``currentMatch`` via AND/OR. Extracted from applyGroupFilter
+// to reduce its return count below qlty's "many returns" threshold.
+func foldGroupFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}, currentMatch bool) (bool, error) {
 	for i := 1; i < len(filterGroup); i += 2 {
 		if i+1 >= len(filterGroup) {
 			return false, fmt.Errorf("malformed group filter: missing condition after operator")
@@ -338,16 +345,23 @@ func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filter
 		if err != nil {
 			return false, err
 		}
-		switch logicalOperator {
-		case "and":
-			currentMatch = currentMatch && subMatch
-		case "or":
-			currentMatch = currentMatch || subMatch
-		default:
+		nextMatch, ok := combineLogicalMatch(logicalOperator, currentMatch, subMatch)
+		if !ok {
 			return false, fmt.Errorf("invalid logical operator: '%v'", filterGroup[i])
 		}
+		currentMatch = nextMatch
 	}
 	return currentMatch, nil
+}
+
+func combineLogicalMatch(op string, current, sub bool) (bool, bool) {
+	switch op {
+	case "and":
+		return current && sub, true
+	case "or":
+		return current || sub, true
+	}
+	return false, false
 }
 
 func evaluateGroupStep(record map[string]interface{}, schema *TableSchema, opItem, condItem interface{}) (string, bool, error) {

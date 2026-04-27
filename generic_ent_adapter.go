@@ -86,6 +86,17 @@ func NewGenericEntAdapter(entityName string) (*GenericEntAdapter, error) {
 // GetPredicateForField routes a field/op/val triple to the per-type
 // predicate builder. Splitting the original 110-line switch into per-type
 // helpers drops cyclomatic complexity from 54 to ~8.
+// fieldTypeBuilders maps field type → predicate builder. The "string" and
+// "text" types share the same builder, hence two entries.
+var fieldTypeBuilders = map[string]func(field, columnName, opLower string, val interface{}) (PredicateFunc, error){
+	"string":    buildStringPredicate,
+	"text":      buildStringPredicate,
+	"int":       buildIntPredicate,
+	"float64":   buildFloatPredicate,
+	"bool":      buildBoolPredicate,
+	"time.Time": buildTimePredicate,
+}
+
 func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val interface{}) (PredicateFunc, error) {
 	columnName := strings.ToLower(field)
 	fieldSchema, ok := ga.tableSchema.FieldMap[columnName]
@@ -96,20 +107,10 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 	if opLower == "between" {
 		return ga.buildBetweenPredicate(field, columnName, fieldSchema.Type, val)
 	}
-	switch fieldSchema.Type {
-	case "string", "text":
-		return buildStringPredicate(field, columnName, opLower, val)
-	case "int":
-		return buildIntPredicate(field, columnName, opLower, val)
-	case "float64":
-		return buildFloatPredicate(field, columnName, opLower, val)
-	case "bool":
-		return buildBoolPredicate(field, columnName, opLower, val)
-	case "time.Time":
-		return buildTimePredicate(field, columnName, opLower, val)
-	default:
-		return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldSchema.Type, field)
+	if builder, found := fieldTypeBuilders[fieldSchema.Type]; found {
+		return builder(field, columnName, opLower, val)
 	}
+	return nil, fmt.Errorf("unsupported field type '%s' in generic adapter for field '%s'", fieldSchema.Type, field)
 }
 
 func (ga *GenericEntAdapter) buildBetweenPredicate(field, columnName, fieldType string, val interface{}) (PredicateFunc, error) {
