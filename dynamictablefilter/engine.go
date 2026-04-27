@@ -261,39 +261,72 @@ func evaluateTimeCondition(recordVal interface{}, op string, filterVal interface
 	return false
 }
 
+// applyFilterRecursive routes one filter group (either a leaf condition or
+// a NOT/AND/OR composition) against ``record``. Splitting the original
+// switch into per-shape helpers drops cyclomatic complexity from 32 to
+// roughly 5 for the top-level dispatcher.
 func applyFilterRecursive(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
 	if len(filterGroup) == 0 {
 		return true, nil
 	}
-	if s, ok := filterGroup[0].(string); ok && s == "!" {
-		if len(filterGroup) != 2 {
-			return false, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d", len(filterGroup))
-		}
-		subFilterGroup, okCast := filterGroup[1].([]interface{})
-		if !okCast {
-			return false, fmt.Errorf("NOT filter operand must be an array, got %T", filterGroup[1])
-		}
-		subMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
-		if err != nil {
-			return false, err
-		}
-		return !subMatch, nil
+	if isNotFilter(filterGroup) {
+		return applyNotFilter(record, schema, filterGroup)
 	}
-	if _, ok := filterGroup[0].(string); ok && len(filterGroup) == 3 {
-		fieldName, _ := filterGroup[0].(string)
-		operator, _ := filterGroup[1].(string)
-		value := filterGroup[2]
-		fieldSchema, fieldExists := schema.FieldMap[strings.ToLower(fieldName)] // Use exported
-		if !fieldExists {
-			return false, fmt.Errorf("field '%s' not found in schema for dynamic table", fieldName)
-		}
-		recordVal, recordValExists := record[fieldName]
-		if !recordValExists {
-			return false, nil
-		}
-		return evaluateCondition(recordVal, operator, value, fieldSchema.Type), nil
+	if isLeafCondition(filterGroup) {
+		return applyLeafCondition(record, schema, filterGroup)
 	}
-	currentMatch, err := applyFilterRecursive(record, schema, filterGroup[0].([]interface{}))
+	return applyGroupFilter(record, schema, filterGroup)
+}
+
+func isNotFilter(filterGroup []interface{}) bool {
+	s, ok := filterGroup[0].(string)
+	return ok && s == "!"
+}
+
+func applyNotFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	if len(filterGroup) != 2 {
+		return false, fmt.Errorf("malformed NOT filter: expected 2 elements, got %d", len(filterGroup))
+	}
+	subFilterGroup, okCast := filterGroup[1].([]interface{})
+	if !okCast {
+		return false, fmt.Errorf("NOT filter operand must be an array, got %T", filterGroup[1])
+	}
+	subMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
+	if err != nil {
+		return false, err
+	}
+	return !subMatch, nil
+}
+
+func isLeafCondition(filterGroup []interface{}) bool {
+	if len(filterGroup) != 3 {
+		return false
+	}
+	_, ok := filterGroup[0].(string)
+	return ok
+}
+
+func applyLeafCondition(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	fieldName, _ := filterGroup[0].(string)
+	operator, _ := filterGroup[1].(string)
+	value := filterGroup[2]
+	fieldSchema, fieldExists := schema.FieldMap[strings.ToLower(fieldName)]
+	if !fieldExists {
+		return false, fmt.Errorf("field '%s' not found in schema for dynamic table", fieldName)
+	}
+	recordVal, recordValExists := record[fieldName]
+	if !recordValExists {
+		return false, nil
+	}
+	return evaluateCondition(recordVal, operator, value, fieldSchema.Type), nil
+}
+
+func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
+	first, ok := filterGroup[0].([]interface{})
+	if !ok {
+		return false, fmt.Errorf("group filter first element must be an array, got %T", filterGroup[0])
+	}
+	currentMatch, err := applyFilterRecursive(record, schema, first)
 	if err != nil {
 		return false, err
 	}
@@ -301,28 +334,36 @@ func applyFilterRecursive(record map[string]interface{}, schema *TableSchema, fi
 		if i+1 >= len(filterGroup) {
 			return false, fmt.Errorf("malformed group filter: missing condition after operator")
 		}
-		logicalOperatorStr, ok := filterGroup[i].(string)
-		if !ok {
-			return false, fmt.Errorf("logical operator must be a string, got %T", filterGroup[i])
-		}
-		logicalOperator := strings.ToLower(logicalOperatorStr)
-		subFilterGroup, okCast := filterGroup[i+1].([]interface{})
-		if !okCast {
-			return false, fmt.Errorf("group filter operand must be an array, got %T", filterGroup[i+1])
-		}
-		nextSubMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
+		logicalOperator, subMatch, err := evaluateGroupStep(record, schema, filterGroup[i], filterGroup[i+1])
 		if err != nil {
 			return false, err
 		}
-		if logicalOperator == "and" {
-			currentMatch = currentMatch && nextSubMatch
-		} else if logicalOperator == "or" {
-			currentMatch = currentMatch || nextSubMatch
-		} else {
-			return false, fmt.Errorf("invalid logical operator: '%s'", logicalOperatorStr)
+		switch logicalOperator {
+		case "and":
+			currentMatch = currentMatch && subMatch
+		case "or":
+			currentMatch = currentMatch || subMatch
+		default:
+			return false, fmt.Errorf("invalid logical operator: '%v'", filterGroup[i])
 		}
 	}
 	return currentMatch, nil
+}
+
+func evaluateGroupStep(record map[string]interface{}, schema *TableSchema, opItem, condItem interface{}) (string, bool, error) {
+	logicalOperatorStr, ok := opItem.(string)
+	if !ok {
+		return "", false, fmt.Errorf("logical operator must be a string, got %T", opItem)
+	}
+	subFilterGroup, okCast := condItem.([]interface{})
+	if !okCast {
+		return "", false, fmt.Errorf("group filter operand must be an array, got %T", condItem)
+	}
+	subMatch, err := applyFilterRecursive(record, schema, subFilterGroup)
+	if err != nil {
+		return "", false, err
+	}
+	return strings.ToLower(logicalOperatorStr), subMatch, nil
 }
 
 func FilterDynamicData(data []map[string]interface{}, schema *TableSchema, filterInput interface{}) ([]map[string]interface{}, error) {
