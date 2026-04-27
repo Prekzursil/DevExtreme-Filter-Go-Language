@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -331,7 +332,9 @@ func dynamicTableSchemaHandler(w http.ResponseWriter, tableName string) {
 	schema, err := dynamictablefilter.LoadTableSchema(tableName)
 	if err != nil {
 		log.Println("Error loading schema for dynamic table")
-		if os.IsNotExist(err) {
+		// errors.Is unwraps fmt.Errorf %w wrappers — needed since LoadTableSchema
+		// wraps the underlying os.ErrNotExist via fmt.Errorf("...: %w", err).
+		if errors.Is(err, os.ErrNotExist) {
 			http.Error(w, "Schema not found for table "+tableName, http.StatusNotFound)
 		} else {
 			http.Error(w, "Failed to load schema for table "+tableName, http.StatusInternalServerError)
