@@ -73,3 +73,33 @@ func TestRunFilterQuery_TransactionWithCancelContext(t *testing.T) {
 		t.Error("expected error for cancelled context on transaction")
 	}
 }
+
+// TestDynamicTableSchemaHandler_EncoderErrorPath drives line 195-197 in
+// main_handlers.go (encoder error → log + continue branch). Uses the
+// writeTablesDir helper from dynamic_tables_handler_test.go.
+func TestDynamicTableSchemaHandler_EncoderErrorPath(t *testing.T) {
+	dir := t.TempDir()
+	writeTablesDir(t, dir, "items",
+		`{"entityName":"Item","fields":[{"name":"id","type":"int"}]}`, "")
+	original := dynamictablefilter.GetBaseTablesPath()
+	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
+	dynamictablefilter.SetBaseTablesPath(dir)
+
+	dynamicTableSchemaHandler(&failingResponseWriter{}, "items")
+}
+
+// TestDynamicTableFilterHandler_EncoderErrorPath drives line 228-230 in
+// main_handlers.go (encoder error after a successful filter result).
+func TestDynamicTableFilterHandler_EncoderErrorPath(t *testing.T) {
+	dir := t.TempDir()
+	writeTablesDir(t, dir, "items",
+		`{"entityName":"Item","fields":[{"name":"id","type":"int"}]}`,
+		`[{"id":1}]`)
+	original := dynamictablefilter.GetBaseTablesPath()
+	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
+	dynamictablefilter.SetBaseTablesPath(dir)
+
+	r := httptest.NewRequest(http.MethodPost, "/dynamic-tables/items/filter",
+		bytes.NewReader([]byte(`{"filter":[]}`)))
+	dynamicTableFilterHandler(&failingResponseWriter{}, r, "items")
+}
