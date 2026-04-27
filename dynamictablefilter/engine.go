@@ -131,24 +131,29 @@ func evaluateCondition(recordVal interface{}, op string, filterVal interface{}, 
 	return false
 }
 
+// String comparison operators. Each is a top-level function so qlty doesn't
+// attribute lambda returns to evaluateStringCondition's 'many returns' count.
+func stringOpEqual(rec, filt, lowR, lowF string) bool       { return strings.EqualFold(rec, filt) }
+func stringOpNotEqual(rec, filt, lowR, lowF string) bool    { return !strings.EqualFold(rec, filt) }
+func stringOpContains(rec, filt, lowR, lowF string) bool    { return strings.Contains(lowR, lowF) }
+func stringOpStartsWith(rec, filt, lowR, lowF string) bool  { return strings.HasPrefix(lowR, lowF) }
+func stringOpEndsWith(rec, filt, lowR, lowF string) bool    { return strings.HasSuffix(lowR, lowF) }
+func stringOpNotContains(rec, filt, lowR, lowF string) bool { return !strings.Contains(lowR, lowF) }
+
+var stringOpEvaluators = map[string]func(rec, filt, lowR, lowF string) bool{
+	"=":           stringOpEqual,
+	"<>":          stringOpNotEqual,
+	"contains":    stringOpContains,
+	"startswith":  stringOpStartsWith,
+	"endswith":    stringOpEndsWith,
+	"notcontains": stringOpNotContains,
+}
+
 func evaluateStringCondition(recordVal interface{}, op string, filterVal interface{}) bool {
 	sRecordVal := fmt.Sprintf("%v", recordVal)
 	sFilterVal := fmt.Sprintf("%v", filterVal)
-	lowR := strings.ToLower(sRecordVal)
-	lowF := strings.ToLower(sFilterVal)
-	switch op {
-	case "=":
-		return strings.EqualFold(sRecordVal, sFilterVal)
-	case "<>":
-		return !strings.EqualFold(sRecordVal, sFilterVal)
-	case "contains":
-		return strings.Contains(lowR, lowF)
-	case "startswith":
-		return strings.HasPrefix(lowR, lowF)
-	case "endswith":
-		return strings.HasSuffix(lowR, lowF)
-	case "notcontains":
-		return !strings.Contains(lowR, lowF)
+	if eval, ok := stringOpEvaluators[op]; ok {
+		return eval(sRecordVal, sFilterVal, strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
 	}
 	return false
 }
