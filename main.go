@@ -1,3 +1,4 @@
+// Package main is the HTTP entry point for the dynamic-table filter service.
 package main
 
 import (

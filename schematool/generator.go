@@ -1,3 +1,4 @@
+// Package schematool provides HTTP handlers and code generators for dynamic schema management.
 package schematool
 
 import (

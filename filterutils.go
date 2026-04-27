@@ -1,3 +1,4 @@
+// Package main exports filter utility helpers used by the HTTP handlers.
 package main
 
 import (

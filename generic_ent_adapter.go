@@ -1,3 +1,4 @@
+// Package main exposes the generic Ent adapter used to translate filter trees into Ent predicates.
 package main
 
 import (

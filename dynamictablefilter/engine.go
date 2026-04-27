@@ -1,3 +1,4 @@
+// Package dynamictablefilter loads dynamic table schemas/data and applies filter trees to records.
 package dynamictablefilter
 
 import (
