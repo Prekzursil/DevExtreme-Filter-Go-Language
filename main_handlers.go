@@ -22,6 +22,14 @@ type filterRequestBody struct {
 	Filter interface{} `json:"filter"`
 }
 
+// filterContext returns the context used by filterHandler when running
+// the filter query. Tests override this to inject a cancelled context
+// and exercise the runFilterQuery error path on a real entity (the
+// "unsupported entity" branch is covered by GetAdapter; this hook
+// drives the actual-query-error path at line 121-122 in
+// main_handlers.go).
+var filterContext = func() context.Context { return context.Background() }
+
 func decodeFilterRequest(r *http.Request) (*filterRequestBody, int, error) {
 	if r.Method != http.MethodPost {
 		return nil, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed")
@@ -110,7 +118,7 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error parsing filter: %v", err), http.StatusInternalServerError)
 		return
 	}
-	results, err := runFilterQuery(context.Background(), body.Entity, predicate)
+	results, err := runFilterQuery(filterContext(), body.Entity, predicate)
 	if err != nil {
 		log.Println("Backend: Error executing query")
 		// Distinguish unsupported-entity (400) from real query errors (500)
