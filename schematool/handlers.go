@@ -42,6 +42,14 @@ func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (SchemaRequest,
 	return req, true
 }
 
+// generateGoAdapterCodeFn is the indirection used by
+// writeGeneratedSchemaResponse. Tests override it to inject a synthetic
+// error so the previously-unreachable adapter-code error branch (lines
+// 54-58) is exercised. In practice GenerateGoSchemaCode and
+// GenerateGoAdapterCode share identical entity-name validation, so the
+// natural failure mode here can't be triggered without the stub.
+var generateGoAdapterCodeFn = GenerateGoAdapterCode
+
 func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool {
 	log.Printf("Received /generate-schema-code request in schematool")
 	goCode, err := GenerateGoSchemaCode(req)
@@ -50,7 +58,7 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 		http.Error(w, fmt.Sprintf("Error generating schema code: %v", err), http.StatusInternalServerError)
 		return false
 	}
-	adapterCode, err := GenerateGoAdapterCode(req)
+	adapterCode, err := generateGoAdapterCodeFn(req)
 	if err != nil {
 		log.Printf("Error generating Go adapter code: %v", err)
 		http.Error(w, fmt.Sprintf("Error generating adapter code: %v", err), http.StatusInternalServerError)
@@ -69,13 +77,21 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 	return true
 }
 
+// jsonMarshalIndentFn is the indirection used by persistSchemaRequest.
+// Tests override it to inject a synthetic marshal error so the
+// previously-unreachable MarshalIndent error branch (lines 79-82) is
+// exercised. In practice MarshalIndent only fails for non-marshalable
+// types (channels, functions, circular references) and SchemaRequest
+// is fully marshalable.
+var jsonMarshalIndentFn = json.MarshalIndent
+
 func persistSchemaRequest(req SchemaRequest) {
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Printf("Error creating schema_definitions directory: %v", err)
 		return
 	}
 	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
-	fileData, marshalErr := json.MarshalIndent(req, "", "  ")
+	fileData, marshalErr := jsonMarshalIndentFn(req, "", "  ")
 	if marshalErr != nil {
 		log.Printf("Error marshalling schema definition for saving: %v", marshalErr)
 		return
