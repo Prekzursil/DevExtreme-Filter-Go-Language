@@ -32,11 +32,28 @@ var client *ent.Client
 var initialEntities = []string{"transaction", "test1schema", "test2schema", "test3schema"}
 
 func init() {
+	bootstrapPackage()
+}
+
+// bootstrapPackage is the testable body of init(). Pulled out so the
+// log-fatal branch (when openClient errors) can be exercised by a
+// unit test that stubs ``fatalLogger`` to a non-terminating logger.
+// Real init() goes through log.Fatalf via fatalLogger which calls
+// os.Exit(1) — tests redirect to log.Printf to avoid terminating the
+// test process.
+func bootstrapPackage() {
 	if err := openClient(); err != nil {
-		log.Fatalf("failed opening connection to sqlite: %v", err)
+		fatalLogger("failed opening connection to sqlite: %v", err)
+		return
 	}
 	registerAllAdapters(initialEntities)
 }
+
+// fatalLogger is the indirection used by bootstrapPackage's
+// log-fatal branch. Defaults to log.Fatalf (which calls os.Exit(1));
+// tests override to log.Printf so they can drive the branch without
+// terminating the test runner.
+var fatalLogger = log.Fatalf
 
 // openClient opens the in-memory ent client. Extracted from init() so
 // the error branch is testable: a unit test can call openClient with

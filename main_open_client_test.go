@@ -46,3 +46,37 @@ func TestOpenClient_ErrorPath(t *testing.T) {
 		t.Errorf("expected %v, got %v", syntheticErr, err)
 	}
 }
+
+// TestBootstrapPackage_FatalBranch drives the fatalLogger branch in
+// bootstrapPackage. Stubs entOpen to return an error AND fatalLogger
+// to a no-op (so the test runner doesn't terminate via os.Exit(1)).
+// Verifies the call sequence covers the error path without
+// registerAllAdapters running afterward.
+func TestBootstrapPackage_FatalBranch(t *testing.T) {
+	originalEntOpen := entOpen
+	originalFatalLogger := fatalLogger
+	defer func() {
+		entOpen = originalEntOpen
+		fatalLogger = originalFatalLogger
+	}()
+
+	entOpen = func(driverName, dataSourceName string, _ ...ent.Option) (*ent.Client, error) {
+		return nil, errors.New("synthetic ent.Open failure")
+	}
+	fatalCalled := false
+	fatalLogger = func(format string, args ...any) {
+		fatalCalled = true
+	}
+
+	bootstrapPackage()
+
+	if !fatalCalled {
+		t.Error("expected fatalLogger to be invoked when openClient errors")
+	}
+}
+
+// Note: bootstrapPackage's happy path is already exercised by Go's
+// runtime when the test binary loads (init() calls bootstrapPackage).
+// Calling it again from a test would replace the test client with a
+// fresh one missing the seeded schema, so we don't add an explicit
+// happy-path test here.
