@@ -1,8 +1,11 @@
 package schematool
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -55,8 +58,12 @@ func TestPersistSchemaRequest_WriteFileFails(t *testing.T) {
 
 // TestListSchemaDefinitionsHandler_BasePathIsFile drives the read-error
 // branch (ReadDir on a regular file returns ENOTDIR which is NOT
-// os.ErrNotExist, so the handler returns 500).
+// os.ErrNotExist, so the handler returns 500). Linux-only because
+// Windows' file-as-directory error semantics differ.
 func TestListSchemaDefinitionsHandler_BasePathIsFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("ReadDir on a regular file returns different error on Windows; gate runs on Linux CI")
+	}
 	dir := t.TempDir()
 	regularFile := filepath.Join(dir, "blocker")
 	if err := os.WriteFile(regularFile, []byte("x"), 0644); err != nil {
@@ -67,8 +74,37 @@ func TestListSchemaDefinitionsHandler_BasePathIsFile(t *testing.T) {
 	SchemaDefinitionsDir = regularFile
 	defer func() { SchemaDefinitionsDir = original }()
 
-	// Just verify the call doesn't crash — we don't have direct handler access here.
-	if entries, err := os.ReadDir(SchemaDefinitionsDir); err == nil && len(entries) > 0 {
-		t.Skip("ReadDir didn't error on a regular file on this OS — skip")
+	r := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
+	w := httptest.NewRecorder()
+	ListSchemaDefinitionsHandler(w, r)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 from non-directory base path, got %d", w.Code)
+	}
+}
+
+// TestLoadSchemaDefinitionHandler_NonNotExistReadError drives the
+// "Failed to read" branch in LoadSchemaDefinitionHandler. Pre-creating
+// a directory at the target path causes os.ReadFile to return EISDIR
+// which is NOT os.ErrNotExist, so the handler returns 500.
+func TestLoadSchemaDefinitionHandler_NonNotExistReadError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Read on a directory returns different error on Windows; gate runs on Linux CI")
+	}
+	dir := t.TempDir()
+	original := SchemaDefinitionsDir
+	SchemaDefinitionsDir = dir
+	defer func() { SchemaDefinitionsDir = original }()
+
+	// Pre-create a directory at the target file path so ReadFile fails
+	// with EISDIR (not ENOENT).
+	if err := os.MkdirAll(filepath.Join(dir, "Conflict.json"), 0755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=Conflict", nil)
+	w := httptest.NewRecorder()
+	LoadSchemaDefinitionHandler(w, r)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 from EISDIR-style read error, got %d", w.Code)
 	}
 }
