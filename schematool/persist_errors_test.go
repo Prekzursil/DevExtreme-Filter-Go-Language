@@ -9,6 +9,53 @@ import (
 	"testing"
 )
 
+// TestListSchemaDefinitionsHandler_DirMissing exercises the early-return
+// branch for "schema_definitions directory not yet created" (lines 140-142):
+// the handler responds 200 with an empty JSON list rather than a 500.
+func TestListSchemaDefinitionsHandler_DirMissing(t *testing.T) {
+	dir := t.TempDir()
+	original := SchemaDefinitionsDir
+	SchemaDefinitionsDir = filepath.Join(dir, "does-not-exist")
+	defer func() { SchemaDefinitionsDir = original }()
+
+	r := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
+	w := httptest.NewRecorder()
+	ListSchemaDefinitionsHandler(w, r)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 when dir is missing, got %d", w.Code)
+	}
+	if got := w.Body.String(); got != "[]\n" {
+		t.Errorf("expected empty JSON array, got %q", got)
+	}
+}
+
+// TestPersistSchemaRequest_UnsafeEntityNameRejected exercises the
+// gosecurity:S2083 guard: an entity name containing a path-traversal
+// fragment must short-circuit ``persistSchemaRequest`` before any
+// filesystem call. We assert the guard by pointing SchemaDefinitionsDir
+// at a temp dir and verifying nothing gets written there.
+func TestPersistSchemaRequest_UnsafeEntityNameRejected(t *testing.T) {
+	dir := t.TempDir()
+	original := SchemaDefinitionsDir
+	SchemaDefinitionsDir = dir
+	defer func() { SchemaDefinitionsDir = original }()
+
+	for _, name := range []string{"", ".", "..", "../etc/passwd", "foo/bar", `foo\bar`} {
+		persistSchemaRequest(SchemaRequest{
+			EntityName: name,
+			Fields:     []SchemaFieldDefinition{{Name: "id", Type: "int"}},
+		})
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected no files written for unsafe names, got %d", len(entries))
+	}
+}
+
 // TestPersistSchemaRequest_MkdirError forces os.MkdirAll to fail by
 // pointing SchemaDefinitionsDir at a path whose parent is a regular file.
 // MkdirAll returns ENOTDIR, exercising the early-return error branch.
