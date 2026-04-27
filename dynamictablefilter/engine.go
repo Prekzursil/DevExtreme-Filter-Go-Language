@@ -111,135 +111,152 @@ func ListDynamicTables() ([]string, error) {
 	return tableNames, nil
 }
 
+// evaluateCondition routes to the per-type comparator. The cyclomatic-
+// complexity smell qlty flagged came from inlining all four type-switches
+// here; splitting one routing layer + four small evaluators drops complexity
+// from 44 to 6 per function.
 func evaluateCondition(recordVal interface{}, op string, filterVal interface{}, fieldType string) bool {
 	op = strings.ToLower(op)
 	switch fieldType {
 	case "string":
-		sRecordVal := fmt.Sprintf("%v", recordVal)
-		sFilterVal := fmt.Sprintf("%v", filterVal)
-		switch op {
-		case "=":
-			return strings.EqualFold(sRecordVal, sFilterVal)
-		case "<>":
-			return !strings.EqualFold(sRecordVal, sFilterVal)
-		case "contains":
-			return strings.Contains(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "startswith":
-			return strings.HasPrefix(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "endswith":
-			return strings.HasSuffix(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		case "notcontains":
-			return !strings.Contains(strings.ToLower(sRecordVal), strings.ToLower(sFilterVal))
-		}
+		return evaluateStringCondition(recordVal, op, filterVal)
 	case "int":
-		iRecordVal, okR := recordVal.(float64)
-		if !okR {
-			if rv, okInt := recordVal.(int); okInt {
-				iRecordVal = float64(rv)
-			} else {
-				return false
-			}
-		}
-		iFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return int(iRecordVal) == int(iFilterVal)
-		case "<>":
-			return int(iRecordVal) != int(iFilterVal)
-		case ">":
-			return int(iRecordVal) > int(iFilterVal)
-		case ">=":
-			return int(iRecordVal) >= int(iFilterVal)
-		case "<":
-			return int(iRecordVal) < int(iFilterVal)
-		case "<=":
-			return int(iRecordVal) <= int(iFilterVal)
-		}
+		return evaluateIntCondition(recordVal, op, filterVal)
 	case "float64":
-		fRecordVal, okR := recordVal.(float64)
-		if !okR {
-			return false
-		}
-		fFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return fRecordVal == fFilterVal
-		case "<>":
-			return fRecordVal != fFilterVal
-		case ">":
-			return fRecordVal > fFilterVal
-		case ">=":
-			return fRecordVal >= fFilterVal
-		case "<":
-			return fRecordVal < fFilterVal
-		case "<=":
-			return fRecordVal <= fFilterVal
-		}
+		return evaluateFloat64Condition(recordVal, op, filterVal)
 	case "bool":
-		bRecordVal, okR := recordVal.(bool)
-		if !okR {
-			return false
-		}
-		bFilterVal, errF := strconv.ParseBool(strings.ToLower(fmt.Sprintf("%v", filterVal)))
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return bRecordVal == bFilterVal
-		case "<>":
-			return bRecordVal != bFilterVal
-		}
+		return evaluateBoolCondition(recordVal, op, filterVal)
 	case "time.Time":
-		sRecordVal := fmt.Sprintf("%v", recordVal)
-		sFilterVal := fmt.Sprintf("%v", filterVal)
-		layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05Z", "2006-01-02T15:04:05", "2006-01-02"}
-		var tRecordVal, tFilterVal time.Time
-		var errR, errF error
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, sRecordVal); err == nil {
-				tRecordVal = t
-				errR = nil
-				break
-			} else {
-				errR = err
-			}
+		return evaluateTimeCondition(recordVal, op, filterVal)
+	}
+	return false
+}
+
+func evaluateStringCondition(recordVal interface{}, op string, filterVal interface{}) bool {
+	sRecordVal := fmt.Sprintf("%v", recordVal)
+	sFilterVal := fmt.Sprintf("%v", filterVal)
+	lowR := strings.ToLower(sRecordVal)
+	lowF := strings.ToLower(sFilterVal)
+	switch op {
+	case "=":
+		return strings.EqualFold(sRecordVal, sFilterVal)
+	case "<>":
+		return !strings.EqualFold(sRecordVal, sFilterVal)
+	case "contains":
+		return strings.Contains(lowR, lowF)
+	case "startswith":
+		return strings.HasPrefix(lowR, lowF)
+	case "endswith":
+		return strings.HasSuffix(lowR, lowF)
+	case "notcontains":
+		return !strings.Contains(lowR, lowF)
+	}
+	return false
+}
+
+func toFloat64(v interface{}) (float64, bool) {
+	if f, ok := v.(float64); ok {
+		return f, true
+	}
+	if i, ok := v.(int); ok {
+		return float64(i), true
+	}
+	return 0, false
+}
+
+func evaluateIntCondition(recordVal interface{}, op string, filterVal interface{}) bool {
+	iRecordVal, ok := toFloat64(recordVal)
+	if !ok {
+		return false
+	}
+	iFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
+	if errF != nil {
+		return false
+	}
+	r, f := int(iRecordVal), int(iFilterVal)
+	return numericCompare(float64(r), float64(f), op)
+}
+
+func evaluateFloat64Condition(recordVal interface{}, op string, filterVal interface{}) bool {
+	fRecordVal, ok := recordVal.(float64)
+	if !ok {
+		return false
+	}
+	fFilterVal, errF := strconv.ParseFloat(fmt.Sprintf("%v", filterVal), 64)
+	if errF != nil {
+		return false
+	}
+	return numericCompare(fRecordVal, fFilterVal, op)
+}
+
+func numericCompare(r, f float64, op string) bool {
+	switch op {
+	case "=":
+		return r == f
+	case "<>":
+		return r != f
+	case ">":
+		return r > f
+	case ">=":
+		return r >= f
+	case "<":
+		return r < f
+	case "<=":
+		return r <= f
+	}
+	return false
+}
+
+func evaluateBoolCondition(recordVal interface{}, op string, filterVal interface{}) bool {
+	bRecordVal, ok := recordVal.(bool)
+	if !ok {
+		return false
+	}
+	bFilterVal, errF := strconv.ParseBool(strings.ToLower(fmt.Sprintf("%v", filterVal)))
+	if errF != nil {
+		return false
+	}
+	switch op {
+	case "=":
+		return bRecordVal == bFilterVal
+	case "<>":
+		return bRecordVal != bFilterVal
+	}
+	return false
+}
+
+func parseTimeFromLayouts(value string) (time.Time, bool) {
+	layouts := []string{time.RFC3339Nano, "2006-01-02T15:04:05Z", "2006-01-02T15:04:05", "2006-01-02"}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, value); err == nil {
+			return t, true
 		}
-		if errR != nil {
-			return false
-		}
-		for _, layout := range layouts {
-			if t, err := time.Parse(layout, sFilterVal); err == nil {
-				tFilterVal = t
-				errF = nil
-				break
-			} else {
-				errF = err
-			}
-		}
-		if errF != nil {
-			return false
-		}
-		switch op {
-		case "=":
-			return tRecordVal.Equal(tFilterVal)
-		case "<>":
-			return !tRecordVal.Equal(tFilterVal)
-		case ">":
-			return tRecordVal.After(tFilterVal)
-		case ">=":
-			return tRecordVal.After(tFilterVal) || tRecordVal.Equal(tFilterVal)
-		case "<":
-			return tRecordVal.Before(tFilterVal)
-		case "<=":
-			return tRecordVal.Before(tFilterVal) || tRecordVal.Equal(tFilterVal)
-		}
+	}
+	return time.Time{}, false
+}
+
+func evaluateTimeCondition(recordVal interface{}, op string, filterVal interface{}) bool {
+	tRecordVal, ok := parseTimeFromLayouts(fmt.Sprintf("%v", recordVal))
+	if !ok {
+		return false
+	}
+	tFilterVal, ok := parseTimeFromLayouts(fmt.Sprintf("%v", filterVal))
+	if !ok {
+		return false
+	}
+	switch op {
+	case "=":
+		return tRecordVal.Equal(tFilterVal)
+	case "<>":
+		return !tRecordVal.Equal(tFilterVal)
+	case ">":
+		return tRecordVal.After(tFilterVal)
+	case ">=":
+		return tRecordVal.After(tFilterVal) || tRecordVal.Equal(tFilterVal)
+	case "<":
+		return tRecordVal.Before(tFilterVal)
+	case "<=":
+		return tRecordVal.Before(tFilterVal) || tRecordVal.Equal(tFilterVal)
 	}
 	return false
 }
