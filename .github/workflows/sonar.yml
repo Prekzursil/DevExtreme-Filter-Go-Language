@@ -31,19 +31,25 @@ jobs:
         shell: bash
         run: |
           packages=$(go list ./... | grep -vE "/ent($|/)")
-          # -coverpkg covers ALL listed packages from each test (without
-          # this, each package's tests only instrument its own files,
-          # missing cross-package coverage). The combined coverage.out
-          # is what SonarCloud reads.
+          # -coverpkg covers ALL listed packages from each test so
+          # cross-package coverage gets recorded in the combined output.
           coverpkg=$(echo "$packages" | tr '\n' ',' | sed 's/,$//')
           go test $packages -coverprofile=coverage.out -covermode=count -coverpkg="$coverpkg" || true
+          # Debug: dump first 5 lines + size so we can see what the
+          # SonarCloud scanner is receiving.
+          if [ -f coverage.out ]; then
+            echo "=== coverage.out: $(wc -l < coverage.out) lines, $(wc -c < coverage.out) bytes ==="
+            head -5 coverage.out
+            echo "=== sample non-zero hits ==="
+            grep -v ' 0$' coverage.out | head -3
+          fi
           # Strip the Go module-path prefix from coverage.out so
           # SonarCloud's Go scanner can resolve paths against
-          # sonar.sources=. (repo root). Without this, new_coverage is
-          # 0% even when go test reports 100% per-package — Sonar
-          # can't map ``transaction-filter-backend/main.go`` to ``./main.go``.
+          # sonar.sources=. (repo root).
           if [ -f coverage.out ]; then
             sed -i 's|^transaction-filter-backend/||' coverage.out
+            echo "=== After sed strip ==="
+            head -5 coverage.out
           fi
 
       - name: SonarCloud Scan
