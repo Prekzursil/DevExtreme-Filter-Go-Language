@@ -234,7 +234,7 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if encErr := json.NewEncoder(w).Encode(results); encErr != nil {
+	if json.NewEncoder(w).Encode(results) != nil {
 		log.Println("Backend: Error encoding response")
 	}
 }
