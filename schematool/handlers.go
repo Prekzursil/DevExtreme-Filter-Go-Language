@@ -95,22 +95,19 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 var jsonMarshalIndentFn = json.MarshalIndent
 
 func persistSchemaRequest(req SchemaRequest) {
-	// Reject EntityName values that could escape ``SchemaDefinitionsDir``
-	// before constructing the destination path. This closes the
-	// ``gosecurity:S2083`` (path injection from user-controlled data)
-	// surface that previously sat in ``filepath.Join(.., req.EntityName+".json")``.
-	if !isSafeSchemaName(req.EntityName) {
-		log.Printf(
-			"Refusing to persist schema definition with unsafe entity name: %q",
-			req.EntityName,
-		)
-		return
-	}
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
 		log.Printf("Error creating schema_definitions directory: %v", err)
 		return
 	}
-	filePath := filepath.Join(SchemaDefinitionsDir, req.EntityName+".json")
+	// safeSchemaPath enforces a Rel-based containment check on top of
+	// isSafeSchemaName so the Sonar taint analyser (gosecurity:S2083)
+	// can prove ``req.EntityName`` cannot escape SchemaDefinitionsDir
+	// before reaching os.WriteFile.
+	filePath, pathErr := safeSchemaPath(SchemaDefinitionsDir, req.EntityName)
+	if pathErr != nil {
+		log.Printf("Refusing to persist schema definition: %v", pathErr)
+		return
+	}
 	fileData, marshalErr := jsonMarshalIndentFn(req, "", "  ")
 	if marshalErr != nil {
 		log.Printf("Error marshalling schema definition for saving: %v", marshalErr)
@@ -168,12 +165,14 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing 'name' query parameter", http.StatusBadRequest)
 		return
 	}
-	if !isSafeSchemaName(name) {
+	// safeSchemaPath enforces a Rel-based containment check so the Sonar
+	// taint analyser (gosecurity:S2083) can prove ``name`` cannot escape
+	// SchemaDefinitionsDir before reaching os.ReadFile.
+	filePath, pathErr := safeSchemaPath(SchemaDefinitionsDir, name)
+	if pathErr != nil {
 		http.Error(w, "Invalid 'name' query parameter", http.StatusBadRequest)
 		return
 	}
-
-	filePath := filepath.Join(SchemaDefinitionsDir, name+".json")
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -216,4 +215,34 @@ func isSafeSchemaName(name string) bool {
 		return false
 	}
 	return true
+}
+
+// filepathAbsForSchema is the indirection used by safeSchemaPath. Tests
+// can override it to inject filepath.Abs failures (which only occur if
+// os.Getwd fails, which is virtually untestable on real systems).
+var filepathAbsForSchema = filepath.Abs
+
+// safeSchemaPath returns the cleaned absolute path for ``<base>/<name>.json``
+// only when the resolved path stays inside ``base``. Returning an explicit
+// error after a Rel-based containment check is what convinces the Sonar
+// taint analyser (gosecurity:S2083 / CWE-22) that the user-controlled
+// ``name`` cannot reach ``os.WriteFile``/``os.ReadFile``.
+func safeSchemaPath(base, name string) (string, error) {
+	if !isSafeSchemaName(name) {
+		return "", fmt.Errorf("unsafe schema name: %q", name)
+	}
+	candidate := filepath.Join(base, name+".json")
+	cleanedBase, err := filepathAbsForSchema(filepath.Clean(base))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve base path: %w", err)
+	}
+	cleanedCandidate, err := filepathAbsForSchema(filepath.Clean(candidate))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve candidate path: %w", err)
+	}
+	rel, err := filepath.Rel(cleanedBase, cleanedCandidate)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+		return "", fmt.Errorf("schema path escapes base directory: %s", name)
+	}
+	return cleanedCandidate, nil
 }
