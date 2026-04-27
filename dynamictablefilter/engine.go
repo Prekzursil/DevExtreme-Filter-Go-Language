@@ -30,13 +30,19 @@ func GetBaseTablesPath() string {
 // CWE-22 path-injection mitigation that ``CodeQL go/path-injection`` and
 // ``gosecurity:S2083`` flag at the call sites of ``filepath.Join`` with
 // user-supplied ``tableName`` values.
+// filepathAbs is the indirection used by safeJoinUnderBase to resolve
+// absolute paths. Tests override it to inject filepath.Abs failures
+// (which on real systems only happen if Getwd fails — virtually
+// untestable without process-level state corruption).
+var filepathAbs = filepath.Abs
+
 func safeJoinUnderBase(parts ...string) (string, error) {
 	candidate := filepath.Join(append([]string{currentBaseTablesPath}, parts...)...)
-	cleanedBase, err := filepath.Abs(filepath.Clean(currentBaseTablesPath))
+	cleanedBase, err := filepathAbs(filepath.Clean(currentBaseTablesPath))
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve base path: %w", err)
 	}
-	cleanedCandidate, err := filepath.Abs(filepath.Clean(candidate))
+	cleanedCandidate, err := filepathAbs(filepath.Clean(candidate))
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve candidate path: %w", err)
 	}

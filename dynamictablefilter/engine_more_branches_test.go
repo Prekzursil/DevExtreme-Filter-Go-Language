@@ -7,6 +7,47 @@ import (
 	"testing"
 )
 
+// TestSafeJoinUnderBase_BaseAbsErrorPath drives the filepathAbs error
+// branch for the base-path call (line 36-38 in engine.go). Stubs
+// filepathAbs to return a synthetic error on the first call.
+func TestSafeJoinUnderBase_BaseAbsErrorPath(t *testing.T) {
+	originalFilepathAbs := filepathAbs
+	defer func() { filepathAbs = originalFilepathAbs }()
+
+	filepathAbs = func(path string) (string, error) {
+		return "", &fakePathError{}
+	}
+
+	if _, err := safeJoinUnderBase("foo"); err == nil {
+		t.Error("expected error from stubbed filepathAbs (base path)")
+	}
+}
+
+// TestSafeJoinUnderBase_CandidateAbsErrorPath drives the filepathAbs
+// error branch for the candidate-path call (line 40-42 in engine.go).
+// Stubs filepathAbs to succeed on first call but fail on second.
+func TestSafeJoinUnderBase_CandidateAbsErrorPath(t *testing.T) {
+	originalFilepathAbs := filepathAbs
+	defer func() { filepathAbs = originalFilepathAbs }()
+
+	calls := 0
+	filepathAbs = func(path string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "/tmp/base", nil
+		}
+		return "", &fakePathError{}
+	}
+
+	if _, err := safeJoinUnderBase("foo"); err == nil {
+		t.Error("expected error from stubbed filepathAbs (candidate path)")
+	}
+}
+
+type fakePathError struct{}
+
+func (*fakePathError) Error() string { return "synthetic abs failure" }
+
 // TestApplyGroupFilter_NonArrayFirstElement drives line 74-76 in
 // engine_recursion.go directly (instead of via applyFilterRecursive).
 func TestApplyGroupFilter_NonArrayFirstElement(t *testing.T) {
