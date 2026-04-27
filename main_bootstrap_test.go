@@ -83,6 +83,20 @@ func TestBootstrapAndServe_ReturnsOnInvalidPort(t *testing.T) {
 	}
 }
 
+// TestBootstrapAndServe_PropagatesSeedError drives the seed-error
+// propagation path (when seedDatabase returns an error, bootstrapAndServe
+// returns it without trying to listen).
+func TestBootstrapAndServe_PropagatesSeedError(t *testing.T) {
+	originalClient := client
+	client = nil
+	defer func() { client = originalClient }()
+
+	err := bootstrapAndServe(":0")
+	if err == nil {
+		t.Error("expected error to propagate from seedDatabase nil-client")
+	}
+}
+
 func TestRegisterStaticRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	registerStaticRoutes(mux)
