@@ -6,12 +6,18 @@ import (
 )
 
 func TestConvertStringToInt_FloatFallbackHappyPath(t *testing.T) {
-	got, err := convertStringToInt("10.0")
+	// To exercise the float-fallback whole-number happy path
+	// (line 62 in filterconv.go), use a value that fails int Sscan but
+	// succeeds as a whole-number float64. ".0" starts with '.' so int
+	// Sscan rejects it, but float Sscan parses it as 0.0 — a whole
+	// number, so the function returns int(0), nil via the happy-path
+	// branch.
+	got, err := convertStringToInt(".0")
 	if err != nil {
-		t.Errorf("expected nil error for '10.0', got %v", err)
+		t.Errorf("expected nil error for '.0', got %v", err)
 	}
-	if got != 10 {
-		t.Errorf("expected 10, got %d", got)
+	if got != 0 {
+		t.Errorf("expected 0, got %d", got)
 	}
 }
 
