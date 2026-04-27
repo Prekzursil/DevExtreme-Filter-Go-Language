@@ -207,7 +207,10 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), code)
 		return
 	}
-	log.Printf("Backend: Decoded request for entity %q, filter: %+v", body.Entity, body.Filter)
+	// Don't log body.Filter directly via %+v: it's user-controlled JSON and the
+	// raw form would carry injection risk (CWE-117). Log the entity name only,
+	// quoted via %q which escapes control chars.
+	log.Printf("Backend: Decoded request for entity %q", body.Entity)
 	adapter, err := GetAdapter(body.Entity)
 	if err != nil {
 		log.Printf("Backend: Failed to get adapter for entity %q: %v", body.Entity, err)
