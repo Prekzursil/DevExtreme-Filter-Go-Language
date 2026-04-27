@@ -17,6 +17,14 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// HTTP header constants extracted to satisfy go:S1192 ("Define a constant
+// instead of duplicating this literal N times") for ``"Content-Type"`` and
+// ``"application/json"`` which appear 5 times each in handler responses.
+const (
+	headerContentType = "Content-Type"
+	mimeApplicationJSON = "application/json"
+)
+
 type filterRequestBody struct {
 	Entity string      `json:"entity"`
 	Filter interface{} `json:"filter"`
@@ -129,7 +137,7 @@ func filterHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Error executing query: %v", err), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if json.NewEncoder(w).Encode(results) != nil {
 		log.Println("Backend: Error encoding response")
 	}
@@ -140,7 +148,7 @@ func listFilterableEntitiesHandler(w http.ResponseWriter, r *http.Request) {
 	for name := range registeredAdapters {
 		entityNames = append(entityNames, name)
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if json.NewEncoder(w).Encode(entityNames) != nil {
 		log.Println("Backend: Error encoding entity list")
 	}
@@ -157,7 +165,7 @@ func listDynamicTablesHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to list dynamic tables", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if json.NewEncoder(w).Encode(tables) != nil {
 		log.Println("Backend: Error encoding dynamic tables list")
 	}
@@ -199,7 +207,7 @@ func dynamicTableSchemaHandler(w http.ResponseWriter, tableName string) {
 		}
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(schema); err != nil {
 		log.Println("Error encoding dynamic table schema response")
 	}
@@ -232,7 +240,7 @@ func dynamicTableFilterHandler(w http.ResponseWriter, r *http.Request, tableName
 		http.Error(w, "Error during filtering data for table "+tableName, http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(filteredData); err != nil {
 		log.Println("Error encoding dynamic table filter response")
 	}
