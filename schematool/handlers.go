@@ -66,13 +66,13 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 	goCode, err := GenerateGoSchemaCode(req)
 	if err != nil {
 		log.Printf("Error generating Go schema code: %s", loghelper.Safe(err.Error()))
-		http.Error(w, fmt.Sprintf("Error generating schema code: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error generating schema code: %s", loghelper.Safe(err.Error())), http.StatusInternalServerError)
 		return false
 	}
 	adapterCode, err := generateGoAdapterCodeFn(req)
 	if err != nil {
 		log.Printf("Error generating Go adapter code: %s", loghelper.Safe(err.Error()))
-		http.Error(w, fmt.Sprintf("Error generating adapter code: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Error generating adapter code: %s", loghelper.Safe(err.Error())), http.StatusInternalServerError)
 		return false
 	}
 	payload := map[string]string{
