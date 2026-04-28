@@ -10,6 +10,7 @@ import (
 	"time" // Needed for timeOperatorHandlers
 
 	"transaction-filter-backend/dynamictablefilter"
+	"transaction-filter-backend/loghelper"
 	"transaction-filter-backend/schematool"
 
 	"entgo.io/ent/dialect/sql"
@@ -101,7 +102,7 @@ func (ga *GenericEntAdapter) GetPredicateForField(field string, op string, val i
 	columnName := strings.ToLower(field)
 	fieldSchema, ok := ga.tableSchema.FieldMap[columnName]
 	if !ok {
-		return nil, fmt.Errorf("field '%s' not found in schema for entity '%s'", field, ga.entityName)
+		return nil, fmt.Errorf("field '%s' not found in schema for entity '%s'", loghelper.Safe(field), loghelper.Safe(ga.entityName))
 	}
 	opLower := strings.ToLower(op)
 	if opLower == "between" {
