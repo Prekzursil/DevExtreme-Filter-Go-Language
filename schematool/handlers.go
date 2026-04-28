@@ -46,7 +46,7 @@ func decodeSchemaRequest(w http.ResponseWriter, r *http.Request) (SchemaRequest,
 	var req SchemaRequest
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
-		log.Printf("Error decoding /generate-schema-code request: %v", err)
+		log.Printf("Error decoding /generate-schema-code request: %s", loghelper.Safe(err.Error()))
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return SchemaRequest{}, false
 	}
@@ -65,13 +65,13 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 	log.Printf("Received /generate-schema-code request in schematool")
 	goCode, err := GenerateGoSchemaCode(req)
 	if err != nil {
-		log.Printf("Error generating Go schema code: %v", err)
+		log.Printf("Error generating Go schema code: %s", loghelper.Safe(err.Error()))
 		http.Error(w, fmt.Sprintf("Error generating schema code: %v", err), http.StatusInternalServerError)
 		return false
 	}
 	adapterCode, err := generateGoAdapterCodeFn(req)
 	if err != nil {
-		log.Printf("Error generating Go adapter code: %v", err)
+		log.Printf("Error generating Go adapter code: %s", loghelper.Safe(err.Error()))
 		http.Error(w, fmt.Sprintf("Error generating adapter code: %v", err), http.StatusInternalServerError)
 		return false
 	}
@@ -81,7 +81,7 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 	}
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("Error encoding schema/adapter code response: %v", err)
+		log.Printf("Error encoding schema/adapter code response: %s", loghelper.Safe(err.Error()))
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		return false
 	}
@@ -98,7 +98,7 @@ var jsonMarshalIndentFn = json.MarshalIndent
 
 func persistSchemaRequest(req SchemaRequest) {
 	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
-		log.Printf("Error creating schema_definitions directory: %v", err)
+		log.Printf("Error creating schema_definitions directory: %s", loghelper.Safe(err.Error()))
 		return
 	}
 	// safeSchemaPath enforces a Rel-based containment check on top of
@@ -115,11 +115,11 @@ func persistSchemaRequest(req SchemaRequest) {
 	}
 	fileData, marshalErr := jsonMarshalIndentFn(req, "", "  ")
 	if marshalErr != nil {
-		log.Printf("Error marshalling schema definition for saving: %v", marshalErr)
+		log.Printf("Error marshalling schema definition for saving: %s", loghelper.Safe(marshalErr.Error()))
 		return
 	}
 	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
-		log.Printf("Error writing schema definition file %q: %v", filePath, err)
+		log.Printf("Error writing schema definition file %q: %s", filePath, loghelper.Safe(err.Error()))
 	} else {
 		log.Printf("Saved schema definition to %q", filePath)
 	}
@@ -139,7 +139,7 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode([]string{})
 			return
 		}
-		log.Printf("Error reading schema_definitions directory: %v", err)
+		log.Printf("Error reading schema_definitions directory: %s", loghelper.Safe(err.Error()))
 		http.Error(w, "Failed to list schema definitions", http.StatusInternalServerError)
 		return
 	}
@@ -153,7 +153,7 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(definitionNames); err != nil {
-		log.Printf("Error encoding definition names: %v", err)
+		log.Printf("Error encoding definition names: %s", loghelper.Safe(err.Error()))
 		http.Error(w, "Failed to encode definition names", http.StatusInternalServerError)
 	}
 }
@@ -183,7 +183,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		if os.IsNotExist(err) {
 			http.Error(w, "Schema definition not found", http.StatusNotFound)
 		} else {
-			log.Printf("Error reading schema definition file %q: %v", filePath, err)
+			log.Printf("Error reading schema definition file %q: %s", filePath, loghelper.Safe(err.Error()))
 			http.Error(w, "Failed to read schema definition", http.StatusInternalServerError)
 		}
 		return
@@ -191,7 +191,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 
 	var schemaReq SchemaRequest
 	if err := json.Unmarshal(fileData, &schemaReq); err != nil {
-		log.Printf("Error unmarshalling schema definition file %q: %v", filePath, err)
+		log.Printf("Error unmarshalling schema definition file %q: %s", filePath, loghelper.Safe(err.Error()))
 		http.Error(w, "Invalid schema definition file format", http.StatusInternalServerError)
 		return
 	}
@@ -202,7 +202,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 	// our schema, regardless of what's on disk.
 	w.Header().Set(headerContentType, mimeApplicationJSON)
 	if err := json.NewEncoder(w).Encode(schemaReq); err != nil {
-		log.Printf("Error writing schema definition response: %v", err)
+		log.Printf("Error writing schema definition response: %s", loghelper.Safe(err.Error()))
 	}
 }
 
