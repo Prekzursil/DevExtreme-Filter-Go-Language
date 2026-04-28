@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"transaction-filter-backend/loghelper"
 )
 
 // Header / status / content-type literals reused across handlers; pulled to
@@ -105,7 +107,10 @@ func persistSchemaRequest(req SchemaRequest) {
 	// before reaching os.WriteFile.
 	filePath, pathErr := safeSchemaPath(SchemaDefinitionsDir, req.EntityName)
 	if pathErr != nil {
-		log.Printf("Refusing to persist schema definition: %v", pathErr)
+		// loghelper.Safe escapes CR/LF/TAB so the user-controlled
+		// EntityName cannot smuggle a fake log line (Sonar
+		// gosecurity:S5145 / CWE-117 mitigation).
+		log.Printf("Refusing to persist schema definition: %s", loghelper.Safe(pathErr.Error()))
 		return
 	}
 	fileData, marshalErr := jsonMarshalIndentFn(req, "", "  ")
