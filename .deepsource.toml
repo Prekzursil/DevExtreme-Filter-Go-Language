@@ -1,0 +1,35 @@
+version = 1
+
+# DeepSource was running with default analyzers + zero exclusions, which
+# pulled the entgo-generated ``ent/`` directory and other generated
+# artefacts into the issue surface (140 findings, almost all from
+# generated code). Lock the analyzer set + exclusions to mirror what
+# Codacy / SonarCloud / qlty already analyse, so the strict-zero contract
+# can converge across all four platforms.
+
+exclude_patterns = [
+  "ent/**",                # entgo-generated CRUD layer (DO NOT EDIT)
+  "schema_definitions/**", # entgo schema sources, regenerated as ent/
+  "static/**",             # served-as-is HTML / JS assets
+  "docs/**",               # markdown narratives, no analysable code
+  "scripts/**",            # one-off Bash/PowerShell helpers
+]
+
+test_patterns = [
+  "**/*_test.go",
+]
+
+[[analyzers]]
+name = "go"
+enabled = true
+
+  [analyzers.meta]
+  import_root = "transaction-filter-backend"
+
+[[analyzers]]
+name = "secrets"
+enabled = true
+
+[[analyzers]]
+name = "test-coverage"
+enabled = true
