@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -36,8 +35,7 @@ func TestFilterHandler_RejectsMalformedJson(t *testing.T) {
 }
 
 func TestFilterHandler_UnknownEntity(t *testing.T) {
-	body, _ := json.Marshal(filterRequestBody{Entity: "doesnotexist", Filter: nil})
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterBodyRequest(t, filterRequestBody{Entity: "doesnotexist", Filter: nil})
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusBadRequest {

@@ -16,21 +16,33 @@ import (
 var testClient *ent.Client
 
 // TestMain sets up the in-memory SQLite database for tests and tears it down.
+//
+// All setup/teardown lives in runTestMain so its deferred cleanup (notably
+// testClient.Close) runs before the single os.Exit here — calling os.Exit
+// inside the function holding the defers would skip them (revive
+// exitAfterDefer).
 func TestMain(m *testing.M) {
+	os.Exit(runTestMain(m))
+}
+
+func runTestMain(m *testing.M) int {
 	log.Println("TestMain: START")
 	var errOpen error
 	testClient, errOpen = ent.Open("sqlite3", "file:ent_test_main?mode=memory&cache=shared&_fk=1")
 	if errOpen != nil {
-		log.Fatalf("failed opening connection to sqlite: %v", errOpen)
+		log.Printf("failed opening connection to sqlite: %v", errOpen)
+		return 1
 	}
 	defer func() { _ = testClient.Close() }()
 
 	if err := testClient.Schema.Create(context.Background()); err != nil {
-		log.Fatalf("failed creating schema resources: %v", err)
+		log.Printf("failed creating schema resources: %v", err)
+		return 1
 	}
 
 	originalClient := client
 	client = testClient
+	defer func() { client = originalClient }()
 
 	// Adapters should be registered by their init() functions.
 	// e.g. init() in transaction_adapter.go, test1schema_adapter.go etc.
@@ -42,10 +54,8 @@ func TestMain(m *testing.M) {
 	log.Println("TestMain: Calling m.Run()...")
 	code := m.Run()
 	log.Printf("TestMain: m.Run() finished with code %d.", code)
-
-	client = originalClient
 	log.Println("TestMain: Restored original client. Exiting.")
-	os.Exit(code)
+	return code
 }
 
 func generateTestTransactions(c *ent.Client, count int) {

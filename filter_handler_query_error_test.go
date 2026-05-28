@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -36,8 +34,7 @@ func TestFilterHandler_RegisteredButUnsupportedRoute(t *testing.T) {
 	// → 400 BadRequest branch in filterHandler.
 	RegisterAdapter("ghost", passThroughAdapter{})
 
-	body, _ := json.Marshal(filterRequestBody{Entity: "ghost", Filter: nil})
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterBodyRequest(t, filterRequestBody{Entity: "ghost", Filter: nil})
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusBadRequest {

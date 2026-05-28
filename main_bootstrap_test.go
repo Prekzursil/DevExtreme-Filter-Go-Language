@@ -23,15 +23,6 @@ func TestBuildHTTPHandlers(t *testing.T) {
 	}
 }
 
-func TestListFilterableEntitiesHandler(t *testing.T) {
-	r := httptest.NewRequest(http.MethodGet, "/list-filterable-entities", nil)
-	w := httptest.NewRecorder()
-	listFilterableEntitiesHandler(w, r)
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
-	}
-}
-
 func TestListDynamicTablesHandler_NonGet(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/dynamic-tables", nil)
 	w := httptest.NewRecorder()

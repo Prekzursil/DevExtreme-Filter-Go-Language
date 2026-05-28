@@ -1,7 +1,6 @@
 package schematool
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,21 +9,6 @@ import (
 	"strings"
 	"testing"
 )
-
-func withSchemaDir(t *testing.T, dir string) {
-	t.Helper()
-	original := SchemaDefinitionsDir
-	t.Cleanup(func() { SchemaDefinitionsDir = original })
-	SchemaDefinitionsDir = dir
-}
-
-// mustWriteFile writes content to path and fails the test on error.
-func mustWriteFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
 
 func TestListSchemaDefinitionsHandler_DirDoesNotExist(t *testing.T) {
 	// Set SchemaDefinitionsDir to a non-existent path; handler should return 200 + empty list.
@@ -42,17 +26,14 @@ func TestListSchemaDefinitionsHandler_DirDoesNotExist(t *testing.T) {
 }
 
 func TestListSchemaDefinitionsHandler_WithExistingDir(t *testing.T) {
-	dir := t.TempDir()
-	withSchemaDir(t, dir)
+	dir := useTempSchemaDir(t)
 	// Create some sample schema files
 	for name, content := range map[string]string{
 		"user.json":    `{"entityName":"user","fields":[]}`,
 		"product.json": `{"entityName":"product","fields":[]}`,
 		"ignored.txt":  `ignore`,
 	} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
-			t.Fatalf("write %s: %v", name, err)
-		}
+		mustWriteFile(t, filepath.Join(dir, name), content)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
 	w := httptest.NewRecorder()
@@ -70,8 +51,7 @@ func TestListSchemaDefinitionsHandler_WithExistingDir(t *testing.T) {
 }
 
 func TestLoadSchemaDefinitionHandler_HappyPath(t *testing.T) {
-	dir := t.TempDir()
-	withSchemaDir(t, dir)
+	dir := useTempSchemaDir(t)
 	mustWriteFile(t, filepath.Join(dir, "TestUser.json"), `{"entityName":"TestUser","fields":[{"name":"id","type":"int"}]}`)
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=TestUser", nil)
 	w := httptest.NewRecorder()
@@ -85,8 +65,7 @@ func TestLoadSchemaDefinitionHandler_HappyPath(t *testing.T) {
 }
 
 func TestLoadSchemaDefinitionHandler_BadJsonOnDisk(t *testing.T) {
-	dir := t.TempDir()
-	withSchemaDir(t, dir)
+	dir := useTempSchemaDir(t)
 	mustWriteFile(t, filepath.Join(dir, "Broken.json"), `not-json`)
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=Broken", nil)
 	w := httptest.NewRecorder()
@@ -97,13 +76,8 @@ func TestLoadSchemaDefinitionHandler_BadJsonOnDisk(t *testing.T) {
 }
 
 func TestGenerateSchemaCodeHandler_WritesSchemaFile(t *testing.T) {
-	dir := t.TempDir()
-	withSchemaDir(t, dir)
-	body, _ := json.Marshal(SchemaRequest{
-		EntityName: "TestEntity",
-		Fields:     []SchemaFieldDefinition{{Name: "id", Type: "int"}},
-	})
-	req := httptest.NewRequest(http.MethodPost, "/generate-schema-code", bytes.NewReader(body))
+	dir := useTempSchemaDir(t)
+	req := newSchemaCodeRequest(t, "TestEntity")
 	w := httptest.NewRecorder()
 	GenerateSchemaCodeHandler(w, req)
 	if w.Code != http.StatusOK {
@@ -113,8 +87,4 @@ func TestGenerateSchemaCodeHandler_WritesSchemaFile(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "TestEntity.json")); err != nil {
 		t.Errorf("expected schema file written to %s: %v", dir, err)
 	}
-}
-
-func contains(s, sub string) bool {
-	return strings.Contains(s, sub)
 }

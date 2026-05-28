@@ -165,18 +165,8 @@ func TestLoadSchemaDefinitionHandler_RejectsTraversalName(t *testing.T) {
 }
 
 func TestLoadSchemaDefinitionHandler_LoadsValidJSON(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
-
-	body, _ := json.Marshal(SchemaRequest{
-		EntityName: "Foo",
-		Fields:     []SchemaFieldDefinition{{Name: "id", Type: "int"}},
-	})
-	if err := os.WriteFile(filepath.Join(dir, "Foo.json"), body, 0644); err != nil {
-		t.Fatal(err)
-	}
+	dir := useTempSchemaDir(t)
+	writeSchemaFile(t, dir, "Foo", fooSchemaRequestJSON(t))
 
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=Foo", nil)
 	w := httptest.NewRecorder()
@@ -194,14 +184,8 @@ func TestLoadSchemaDefinitionHandler_LoadsValidJSON(t *testing.T) {
 }
 
 func TestLoadSchemaDefinitionHandler_HandlesCorruptJSON(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
-
-	if err := os.WriteFile(filepath.Join(dir, "Bad.json"), []byte("not json"), 0644); err != nil {
-		t.Fatal(err)
-	}
+	dir := useTempSchemaDir(t)
+	writeSchemaFile(t, dir, "Bad", []byte("not json"))
 
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=Bad", nil)
 	w := httptest.NewRecorder()
@@ -212,18 +196,10 @@ func TestLoadSchemaDefinitionHandler_HandlesCorruptJSON(t *testing.T) {
 }
 
 func TestListSchemaDefinitionsHandler_ListsExistingFiles(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
-
-	if err := os.WriteFile(filepath.Join(dir, "Alpha.json"), []byte("{}"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "Beta.json"), []byte("{}"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "skip.txt"), []byte("not a schema"), 0644); err != nil {
+	dir := useTempSchemaDir(t)
+	writeSchemaFile(t, dir, "Alpha", []byte("{}"))
+	writeSchemaFile(t, dir, "Beta", []byte("{}"))
+	if err := os.WriteFile(filepath.Join(dir, "skip.txt"), []byte("not a schema"), 0600); err != nil {
 		t.Fatal(err)
 	}
 

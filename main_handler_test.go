@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -76,11 +75,7 @@ func TestFilterHandler_RejectsMissingEntity(t *testing.T) {
 }
 
 func TestFilterHandler_UnsupportedEntity(t *testing.T) {
-	body, _ := json.Marshal(map[string]interface{}{
-		"entity": "totally-unsupported-entity",
-		"filter": []interface{}{},
-	})
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterRequest(t, "totally-unsupported-entity", []interface{}{})
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusBadRequest {
@@ -89,11 +84,7 @@ func TestFilterHandler_UnsupportedEntity(t *testing.T) {
 }
 
 func TestFilterHandler_HappyPathTransaction(t *testing.T) {
-	body, _ := json.Marshal(map[string]interface{}{
-		"entity": "transaction",
-		"filter": []interface{}{},
-	})
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterRequest(t, "transaction", []interface{}{})
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusOK {

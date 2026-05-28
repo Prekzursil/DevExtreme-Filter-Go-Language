@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
-
-	"transaction-filter-backend/dynamictablefilter"
 )
 
 // TestListDynamicTablesHandler_ReadErrorPath drives the
@@ -23,12 +21,10 @@ func TestListDynamicTablesHandler_ReadErrorPath(t *testing.T) {
 	}
 	dir := t.TempDir()
 	regularFile := filepath.Join(dir, "not-a-dir")
-	if err := os.WriteFile(regularFile, []byte("x"), 0644); err != nil {
+	if err := os.WriteFile(regularFile, []byte("x"), 0600); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
-	original := dynamictablefilter.GetBaseTablesPath()
-	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
-	dynamictablefilter.SetBaseTablesPath(regularFile)
+	withDynamicTablesPath(t, regularFile)
 
 	r := httptest.NewRequest(http.MethodGet, "/dynamic-tables", nil)
 	w := httptest.NewRecorder()
@@ -39,10 +35,7 @@ func TestListDynamicTablesHandler_ReadErrorPath(t *testing.T) {
 }
 
 func TestListDynamicTablesHandler_EmptyDirReturnsList(t *testing.T) {
-	dir := t.TempDir()
-	original := dynamictablefilter.GetBaseTablesPath()
-	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
-	dynamictablefilter.SetBaseTablesPath(dir)
+	withDynamicTablesPath(t, t.TempDir())
 
 	r := httptest.NewRequest(http.MethodGet, "/dynamic-tables", nil)
 	w := httptest.NewRecorder()
