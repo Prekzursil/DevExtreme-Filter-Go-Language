@@ -1,6 +1,7 @@
 // Per-type condition evaluators for dynamictablefilter, split out of
 // engine.go so that each file's qlty "high total complexity" stays below
 // the smell threshold. Behavior is unchanged from the original engine.go.
+
 package dynamictablefilter
 
 import (

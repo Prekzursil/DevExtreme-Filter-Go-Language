@@ -44,11 +44,15 @@ var GoKeywords = map[string]bool{
 // tests can override it via “t.TempDir()“.
 var SchemaDefinitionsDir = "./schema_definitions"
 
+// SchemaFieldDefinition is a single field (name + Go type) of a dynamic
+// entity schema.
 type SchemaFieldDefinition struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
 
+// SchemaRequest is the payload describing an entity to generate: its name and
+// the list of field definitions.
 type SchemaRequest struct {
 	EntityName string                  `json:"entityName"`
 	Fields     []SchemaFieldDefinition `json:"fields"`
@@ -65,6 +69,8 @@ var entFieldEmitters = map[string]string{
 	"float64":   "field.Float",
 }
 
+// GenerateGoSchemaCode validates req and returns the Go source for an entgo
+// ent.Schema definition of the requested entity.
 func GenerateGoSchemaCode(req SchemaRequest) (string, error) {
 	name, err := validateAndSanitizeSchemaRequest(req)
 	if err != nil {
@@ -153,101 +159,103 @@ func emitEntFields(sb *strings.Builder, fields []SchemaFieldDefinition) error {
 	return nil
 }
 
+// GenerateGoAdapterCode returns the Go source for an EntityAdapter scaffold
+// (predicate dispatch plus And/Or/Not combinators) for the requested entity.
 func GenerateGoAdapterCode(req SchemaRequest) (string, error) {
 	if req.EntityName == "" {
 		return "", fmt.Errorf("entity name cannot be empty for adapter generation")
 	}
-
-	sanitizedEntityTypeName := req.EntityName
-	sanitizedEntityTypeName = strings.ReplaceAll(sanitizedEntityTypeName, "-", "")
-	sanitizedEntityTypeName = strings.ReplaceAll(sanitizedEntityTypeName, "_", "")
-	sanitizedEntityTypeName = strings.ReplaceAll(sanitizedEntityTypeName, " ", "")
-	if len(sanitizedEntityTypeName) == 0 {
+	typeName := sanitizeEntityName(req.EntityName)
+	if typeName == "" {
 		return "", fmt.Errorf("sanitized entity name is empty for adapter")
 	}
-	if len(sanitizedEntityTypeName) > 0 && unicode.IsLower(rune(sanitizedEntityTypeName[0])) {
-		runes := []rune(sanitizedEntityTypeName)
-		runes[0] = unicode.ToUpper(runes[0])
-		sanitizedEntityTypeName = string(runes)
-	}
-
-	entityNameLower := strings.ToLower(sanitizedEntityTypeName)
-	if _, isKeyword := GoKeywords[entityNameLower]; isKeyword {
-		entityNameLower += "_"
-	}
+	lowerName := adapterEntityLower(typeName)
+	adapterName := fmt.Sprintf("%sAdapter", typeName)
 
 	var sb strings.Builder
+	writeAdapterHeader(&sb, typeName, lowerName, adapterName)
+	writeAdapterPredicateForField(&sb, typeName, lowerName, adapterName, req.Fields)
+	writeAdapterCombinator(&sb, typeName, lowerName, adapterName, "And")
+	writeAdapterCombinator(&sb, typeName, lowerName, adapterName, "Or")
+	writeAdapterNotPredicate(&sb, typeName, lowerName, adapterName)
+	writeAdapterInit(&sb, lowerName, adapterName)
+	return sb.String(), nil
+}
+
+// adapterEntityLower lowercases the entity name and suffixes "_" when it
+// collides with a Go keyword so the generated import alias stays valid.
+func adapterEntityLower(typeName string) string {
+	lower := strings.ToLower(typeName)
+	if GoKeywords[lower] {
+		lower += "_"
+	}
+	return lower
+}
+
+func writeAdapterHeader(sb *strings.Builder, typeName, lowerName, adapterName string) {
 	sb.WriteString("package main // Or your appropriate package\n\n")
 	sb.WriteString("import (\n")
 	sb.WriteString("\t\"fmt\"\n")
 	sb.WriteString("\t\"strings\"\n")
 	sb.WriteString("\t\"time\"\n\n")
-	sb.WriteString(fmt.Sprintf("\t\"transaction-filter-backend/ent/%s\"\n", entityNameLower))
-	sb.WriteString(fmt.Sprintf("\t\"transaction-filter-backend/ent/predicate\" // For predicate.%s type alias\n", sanitizedEntityTypeName))
+	fmt.Fprintf(sb, "\t\"transaction-filter-backend/ent/%s\"\n", lowerName)
+	fmt.Fprintf(sb, "\t\"transaction-filter-backend/ent/predicate\" // For predicate.%s type alias\n", typeName)
 	sb.WriteString("\t\"entgo.io/ent/dialect/sql\" \n")
 	sb.WriteString(")\n\n")
 
-	adapterName := fmt.Sprintf("%sAdapter", sanitizedEntityTypeName)
-	sb.WriteString(fmt.Sprintf("// %s implements the EntityAdapter for the %s entity.\n", adapterName, sanitizedEntityTypeName))
-	sb.WriteString(fmt.Sprintf("type %s struct{}\n\n", adapterName))
+	fmt.Fprintf(sb, "// %s implements the EntityAdapter for the %s entity.\n", adapterName, typeName)
+	fmt.Fprintf(sb, "type %s struct{}\n\n", adapterName)
+}
 
-	sb.WriteString(fmt.Sprintf("// GetPredicateForField constructs a predicate for %s.\n", sanitizedEntityTypeName))
-	sb.WriteString(fmt.Sprintf("func (ta *%s) GetPredicateForField(field string, op string, val interface{}) (PredicateFunc, error) {\n", adapterName))
+func writeAdapterPredicateForField(sb *strings.Builder, typeName, lowerName, adapterName string, fields []SchemaFieldDefinition) {
+	fmt.Fprintf(sb, "// GetPredicateForField constructs a predicate for %s.\n", typeName)
+	fmt.Fprintf(sb, "func (ta *%s) GetPredicateForField(field string, op string, val interface{}) (PredicateFunc, error) {\n", adapterName)
 	sb.WriteString("\tfield = strings.ToLower(field)\n")
 	sb.WriteString("\tswitch field {\n")
-	for _, f := range req.Fields {
-		goFieldName := f.Name
-
-		sb.WriteString(fmt.Sprintf("\tcase \"%s\":\n", strings.ToLower(f.Name)))
-		sb.WriteString(fmt.Sprintf("\t\t// TODO: Implement predicate logic for field '%s' (type: %s)\n", f.Name, f.Type))
-		sb.WriteString(fmt.Sprintf("\t\t// Example for string EQ: return PredicateFunc(%s.%sEQ(val.(string))), nil\n", entityNameLower, goFieldName))
-		sb.WriteString(fmt.Sprintf("\t\t// Example for int GT: return PredicateFunc(%s.%sGT(val.(int))), nil\n", entityNameLower, goFieldName))
-		sb.WriteString(fmt.Sprintf("\t\treturn nil, fmt.Errorf(\"predicate for field '%s' (type %s) not fully implemented yet\")\n", f.Name, f.Type))
+	for _, f := range fields {
+		fmt.Fprintf(sb, "\tcase \"%s\":\n", strings.ToLower(f.Name))
+		fmt.Fprintf(sb, "\t\t// TODO: Implement predicate logic for field '%s' (type: %s)\n", f.Name, f.Type)
+		fmt.Fprintf(sb, "\t\t// Example for string EQ: return PredicateFunc(%s.%sEQ(val.(string))), nil\n", lowerName, f.Name)
+		fmt.Fprintf(sb, "\t\t// Example for int GT: return PredicateFunc(%s.%sGT(val.(int))), nil\n", lowerName, f.Name)
+		fmt.Fprintf(sb, "\t\treturn nil, fmt.Errorf(\"predicate for field '%s' (type %s) not fully implemented yet\")\n", f.Name, f.Type)
 	}
 	sb.WriteString("\tdefault:\n")
-	sb.WriteString(fmt.Sprintf("\t\treturn nil, fmt.Errorf(\"unsupported field for %s: %%s\", field)\n", sanitizedEntityTypeName))
+	fmt.Fprintf(sb, "\t\treturn nil, fmt.Errorf(\"unsupported field for %s: %%s\", field)\n", typeName)
 	sb.WriteString("\t}\n")
 	sb.WriteString("}\n\n")
+}
 
-	sb.WriteString(fmt.Sprintf("// GetAndPredicate combines multiple predicates with AND for %s.\n", sanitizedEntityTypeName))
-	sb.WriteString(fmt.Sprintf("func (ta *%s) GetAndPredicate(predicates ...PredicateFunc) PredicateFunc {\n", adapterName))
+// writeAdapterCombinator emits the GetAndPredicate / GetOrPredicate methods,
+// which differ only in the logical operator ("And"/"Or") and the method name.
+// Parameterising op collapses the two near-identical blocks into one.
+func writeAdapterCombinator(sb *strings.Builder, typeName, lowerName, adapterName, op string) {
+	fmt.Fprintf(sb, "// Get%sPredicate combines multiple predicates with %s for %s.\n", op, strings.ToUpper(op), typeName)
+	fmt.Fprintf(sb, "func (ta *%s) Get%sPredicate(predicates ...PredicateFunc) PredicateFunc {\n", adapterName, op)
 	sb.WriteString("\tif len(predicates) == 0 {\n\t\treturn nil\n\t}\n")
-	sb.WriteString(fmt.Sprintf("\tvar specificPredicates []predicate.%s\n", sanitizedEntityTypeName))
+	fmt.Fprintf(sb, "\tvar specificPredicates []predicate.%s\n", typeName)
 	sb.WriteString("\tfor _, p := range predicates {\n")
 	sb.WriteString("\t\tif p != nil {\n")
-	sb.WriteString(fmt.Sprintf("\t\t\tspecificPredicates = append(specificPredicates, predicate.%s(p))\n", sanitizedEntityTypeName))
+	fmt.Fprintf(sb, "\t\t\tspecificPredicates = append(specificPredicates, predicate.%s(p))\n", typeName)
 	sb.WriteString("\t\t}\n")
 	sb.WriteString("\t}\n")
 	sb.WriteString("\tif len(specificPredicates) == 0 {\n\t\treturn nil\n\t}\n")
-	sb.WriteString(fmt.Sprintf("\treturn PredicateFunc(%s.And(specificPredicates...))\n", entityNameLower))
+	fmt.Fprintf(sb, "\treturn PredicateFunc(%s.%s(specificPredicates...))\n", lowerName, op)
 	sb.WriteString("}\n\n")
+}
 
-	sb.WriteString(fmt.Sprintf("// GetOrPredicate combines multiple predicates with OR for %s.\n", sanitizedEntityTypeName))
-	sb.WriteString(fmt.Sprintf("func (ta *%s) GetOrPredicate(predicates ...PredicateFunc) PredicateFunc {\n", adapterName))
-	sb.WriteString("\tif len(predicates) == 0 {\n\t\treturn nil\n\t}\n")
-	sb.WriteString(fmt.Sprintf("\tvar specificPredicates []predicate.%s\n", sanitizedEntityTypeName))
-	sb.WriteString("\tfor _, p := range predicates {\n")
-	sb.WriteString("\t\tif p != nil {\n")
-	sb.WriteString(fmt.Sprintf("\t\t\tspecificPredicates = append(specificPredicates, predicate.%s(p))\n", sanitizedEntityTypeName))
-	sb.WriteString("\t\t}\n")
-	sb.WriteString("\t}\n")
-	sb.WriteString("\tif len(specificPredicates) == 0 {\n\t\treturn nil\n\t}\n")
-	sb.WriteString(fmt.Sprintf("\treturn PredicateFunc(%s.Or(specificPredicates...))\n", entityNameLower))
-	sb.WriteString("}\n\n")
-
-	sb.WriteString(fmt.Sprintf("// GetNotPredicate negates a predicate for %s.\n", sanitizedEntityTypeName))
-	sb.WriteString(fmt.Sprintf("func (ta *%s) GetNotPredicate(p PredicateFunc) PredicateFunc {\n", adapterName))
+func writeAdapterNotPredicate(sb *strings.Builder, typeName, lowerName, adapterName string) {
+	fmt.Fprintf(sb, "// GetNotPredicate negates a predicate for %s.\n", typeName)
+	fmt.Fprintf(sb, "func (ta *%s) GetNotPredicate(p PredicateFunc) PredicateFunc {\n", adapterName)
 	sb.WriteString("\tif p == nil { return nil }\n")
-	// This is the critical line, ensuring it's a single, correct Sprintf call.
-	sb.WriteString(fmt.Sprintf("\treturn PredicateFunc(%s.Not(predicate.%s(p)))\n", entityNameLower, sanitizedEntityTypeName))
+	fmt.Fprintf(sb, "\treturn PredicateFunc(%s.Not(predicate.%s(p)))\n", lowerName, typeName)
 	sb.WriteString("}\n\n")
+}
 
+func writeAdapterInit(sb *strings.Builder, lowerName, adapterName string) {
 	sb.WriteString("func init() {\n")
 	sb.WriteString("\t// Ensure this adapter is registered. The entity name should be lowercase.\n")
 	sb.WriteString("\t// Note: You might need to make RegisterAdapter public if it's in another package,\n")
 	sb.WriteString("\t// or call this registration from your main package.\n")
-	sb.WriteString(fmt.Sprintf("\t// RegisterAdapter(\"%s\", &%s{})\n", entityNameLower, adapterName))
+	fmt.Fprintf(sb, "\t// RegisterAdapter(\"%s\", &%s{})\n", lowerName, adapterName)
 	sb.WriteString("}\n")
-
-	return sb.String(), nil
 }

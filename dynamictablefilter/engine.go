@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"transaction-filter-backend/pathsafe"   // Shared CWE-22 containment check
 	"transaction-filter-backend/schematool" // For SchemaRequest, SchemaFieldDefinition
 )
 
@@ -37,27 +38,20 @@ var filepathAbs = filepath.Abs
 
 func safeJoinUnderBase(parts ...string) (string, error) {
 	candidate := filepath.Join(append([]string{currentBaseTablesPath}, parts...)...)
-	cleanedBase, err := filepathAbs(filepath.Clean(currentBaseTablesPath))
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve base path: %w", err)
-	}
-	cleanedCandidate, err := filepathAbs(filepath.Clean(candidate))
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve candidate path: %w", err)
-	}
-	rel, err := filepath.Rel(cleanedBase, cleanedCandidate)
-	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
-		return "", fmt.Errorf("path escapes base directory: %s", filepath.Join(parts...))
-	}
-	return cleanedCandidate, nil
+	return pathsafe.Contain(filepathAbs, currentBaseTablesPath, candidate, filepath.Join(parts...))
 }
 
+// TableSchema describes a dynamic table: its entity name, ordered field
+// definitions, and a lower-cased field lookup map built at load time.
 type TableSchema struct {
 	EntityName string                                      `json:"entityName"`
 	Fields     []schematool.SchemaFieldDefinition          `json:"fields"`
 	FieldMap   map[string]schematool.SchemaFieldDefinition // Exported
 }
 
+// LoadTableSchema reads and parses "<base>/<tableName>/schema.json" into a
+// TableSchema, returning an error if the table name escapes the base
+// directory or the file cannot be read or parsed.
 func LoadTableSchema(tableName string) (*TableSchema, error) {
 	schemaPath, err := safeJoinUnderBase(tableName, "schema.json")
 	if err != nil {
@@ -79,6 +73,9 @@ func LoadTableSchema(tableName string) (*TableSchema, error) {
 	return &schema, nil
 }
 
+// LoadTableData reads and parses "<base>/<tableName>/data.json" into a slice
+// of record maps, returning an error if the table name escapes the base
+// directory or the file cannot be read or parsed.
 func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 	dataPath, err := safeJoinUnderBase(tableName, "data.json")
 	if err != nil {
@@ -96,6 +93,9 @@ func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 	return records, nil
 }
 
+// ListDynamicTables returns the names of every subdirectory under the base
+// tables path that contains a schema.json file. A missing base directory
+// yields an empty list rather than an error.
 func ListDynamicTables() ([]string, error) {
 	entries, err := os.ReadDir(currentBaseTablesPath) // Use var
 	if err != nil {
@@ -126,6 +126,9 @@ func ListDynamicTables() ([]string, error) {
 // Splitting them out keeps engine.go's qlty "high total complexity" sum
 // below the smell threshold without changing behavior.
 
+// FilterDynamicData returns the subset of data whose records satisfy the
+// DevExtreme-style filter tree in filterInput. A nil or empty filter returns
+// data unchanged; a non-array filter is an error.
 func FilterDynamicData(data []map[string]interface{}, schema *TableSchema, filterInput interface{}) ([]map[string]interface{}, error) {
 	if filterInput == nil {
 		return data, nil

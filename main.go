@@ -153,10 +153,10 @@ func seedDatabase(ctx context.Context) error {
 	if existing, _ := client.Transaction.Query().Count(ctx); existing > 0 {
 		return nil
 	}
-	generateTransactions(100, ctx)
-	generateTest1SchemaData(100, ctx)
-	generateTest2SchemaData(100, ctx)
-	generateTest3SchemaData(100, ctx)
+	generateTransactions(ctx, 100)
+	generateTest1SchemaData(ctx, 100)
+	generateTest2SchemaData(ctx, 100)
+	generateTest3SchemaData(ctx, 100)
 	return nil
 }
 

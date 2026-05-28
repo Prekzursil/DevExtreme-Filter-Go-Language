@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"transaction-filter-backend/loghelper"
+	"transaction-filter-backend/pathsafe"
 )
 
 // Header / status / content-type literals reused across handlers; pulled to
@@ -237,17 +238,5 @@ func safeSchemaPath(base, name string) (string, error) {
 		return "", fmt.Errorf("unsafe schema name: %q", name)
 	}
 	candidate := filepath.Join(base, name+".json")
-	cleanedBase, err := filepathAbsForSchema(filepath.Clean(base))
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve base path: %w", err)
-	}
-	cleanedCandidate, err := filepathAbsForSchema(filepath.Clean(candidate))
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve candidate path: %w", err)
-	}
-	rel, err := filepath.Rel(cleanedBase, cleanedCandidate)
-	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
-		return "", fmt.Errorf("schema path escapes base directory: %s", name)
-	}
-	return cleanedCandidate, nil
+	return pathsafe.Contain(filepathAbsForSchema, base, candidate, name)
 }
