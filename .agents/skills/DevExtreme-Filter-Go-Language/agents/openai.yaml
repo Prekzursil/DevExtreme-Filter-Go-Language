@@ -1,0 +1,6 @@
+interface:
+  display_name: "DevExtreme Filter Go Language"
+  short_description: "Repo-specific patterns and workflows for DevExtreme-Filter-Go-Language"
+  default_prompt: "Use the DevExtreme-Filter-Go-Language repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
