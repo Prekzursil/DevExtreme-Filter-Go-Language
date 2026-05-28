@@ -100,7 +100,7 @@ func TestListSchemaDefinitionsHandler_DirMissing(t *testing.T) {
 
 // TestPersistSchemaRequest_UnsafeEntityNameRejected exercises the
 // gosecurity:S2083 guard: an entity name containing a path-traversal
-// fragment must short-circuit ``persistSchemaRequest`` before any
+// fragment must short-circuit “persistSchemaRequest“ before any
 // filesystem call. We assert the guard by pointing SchemaDefinitionsDir
 // at a temp dir and verifying nothing gets written there.
 func TestPersistSchemaRequest_UnsafeEntityNameRejected(t *testing.T) {

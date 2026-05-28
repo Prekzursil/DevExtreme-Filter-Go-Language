@@ -18,10 +18,10 @@ import (
 )
 
 // HTTP header constants extracted to satisfy go:S1192 ("Define a constant
-// instead of duplicating this literal N times") for ``"Content-Type"`` and
-// ``"application/json"`` which appear 5 times each in handler responses.
+// instead of duplicating this literal N times") for “"Content-Type"“ and
+// “"application/json"“ which appear 5 times each in handler responses.
 const (
-	headerContentType = "Content-Type"
+	headerContentType   = "Content-Type"
 	mimeApplicationJSON = "application/json"
 )
 

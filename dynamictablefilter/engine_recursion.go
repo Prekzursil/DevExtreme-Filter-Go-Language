@@ -10,7 +10,7 @@ import (
 )
 
 // applyFilterRecursive routes one filter group (either a leaf condition or
-// a NOT/AND/OR composition) against ``record``. Splitting the original
+// a NOT/AND/OR composition) against “record“. Splitting the original
 // switch into per-shape helpers drops cyclomatic complexity from 32 to
 // roughly 5 for the top-level dispatcher.
 func applyFilterRecursive(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}) (bool, error) {
@@ -82,7 +82,7 @@ func applyGroupFilter(record map[string]interface{}, schema *TableSchema, filter
 }
 
 // foldGroupFilter walks the (op, cond) pairs of the group, folding each
-// sub-match into ``currentMatch`` via AND/OR. Extracted from applyGroupFilter
+// sub-match into “currentMatch“ via AND/OR. Extracted from applyGroupFilter
 // to reduce its return count below qlty's "many returns" threshold.
 func foldGroupFilter(record map[string]interface{}, schema *TableSchema, filterGroup []interface{}, currentMatch bool) (bool, error) {
 	for i := 1; i < len(filterGroup); i += 2 {

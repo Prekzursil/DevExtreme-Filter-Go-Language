@@ -42,7 +42,7 @@ func init() {
 
 // bootstrapPackage is the testable body of init(). Pulled out so the
 // log-fatal branch (when openClient errors) can be exercised by a
-// unit test that stubs ``fatalLogger`` to a non-terminating logger.
+// unit test that stubs “fatalLogger“ to a non-terminating logger.
 // Real init() goes through log.Fatalf via fatalLogger which calls
 // os.Exit(1) — tests redirect to log.Printf to avoid terminating the
 // test process.
@@ -202,10 +202,10 @@ func registerStaticRoutes(mux *http.ServeMux) {
 }
 
 // serveBackend starts the backend HTTP(S) listener. If both
-// ``BACKEND_TLS_CERT`` and ``BACKEND_TLS_KEY`` env vars are set, it uses
-// ``ListenAndServeTLS`` (CWE-319 mitigation per Semgrep
-// ``go.lang.security.audit.net.use-tls``). Otherwise it falls back to
-// plaintext ``ListenAndServe`` for local dev. Production deployments
+// “BACKEND_TLS_CERT“ and “BACKEND_TLS_KEY“ env vars are set, it uses
+// “ListenAndServeTLS“ (CWE-319 mitigation per Semgrep
+// “go.lang.security.audit.net.use-tls“). Otherwise it falls back to
+// plaintext “ListenAndServe“ for local dev. Production deployments
 // should always set the TLS env vars or place a TLS-terminating reverse
 // proxy in front of this binary.
 func serveBackend(addr string, handler http.Handler) error {

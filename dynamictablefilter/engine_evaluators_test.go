@@ -6,11 +6,11 @@ import (
 
 func TestEvaluateStringCondition(t *testing.T) {
 	cases := []struct {
-		name    string
-		op      string
-		record  interface{}
-		filter  interface{}
-		want    bool
+		name   string
+		op     string
+		record interface{}
+		filter interface{}
+		want   bool
 	}{
 		{"equals true", "=", "abc", "ABC", true},
 		{"equals false", "=", "abc", "xyz", false},
@@ -37,11 +37,11 @@ func TestEvaluateStringCondition(t *testing.T) {
 
 func TestEvaluateIntCondition(t *testing.T) {
 	cases := []struct {
-		name    string
-		op      string
-		record  interface{}
-		filter  interface{}
-		want    bool
+		name   string
+		op     string
+		record interface{}
+		filter interface{}
+		want   bool
 	}{
 		{"= float64 ok", "=", float64(5), 5, true},
 		{"= int ok", "=", 5, 5, true},
