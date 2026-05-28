@@ -40,8 +40,8 @@ var GoKeywords = map[string]bool{
 }
 
 // SchemaDefinitionsDir is the directory where schema JSON files are saved,
-// relative to the execution path of the main application. It's a ``var`` so
-// tests can override it via ``t.TempDir()``.
+// relative to the execution path of the main application. It's a “var“ so
+// tests can override it via “t.TempDir()“.
 var SchemaDefinitionsDir = "./schema_definitions"
 
 type SchemaFieldDefinition struct {
@@ -177,7 +177,7 @@ func GenerateGoAdapterCode(req SchemaRequest) (string, error) {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("package main // Or your appropriate package\n\n"))
+	sb.WriteString("package main // Or your appropriate package\n\n")
 	sb.WriteString("import (\n")
 	sb.WriteString("\t\"fmt\"\n")
 	sb.WriteString("\t\"strings\"\n")
@@ -242,10 +242,10 @@ func GenerateGoAdapterCode(req SchemaRequest) (string, error) {
 	sb.WriteString(fmt.Sprintf("\treturn PredicateFunc(%s.Not(predicate.%s(p)))\n", entityNameLower, sanitizedEntityTypeName))
 	sb.WriteString("}\n\n")
 
-	sb.WriteString(fmt.Sprintf("func init() {\n"))
-	sb.WriteString(fmt.Sprintf("\t// Ensure this adapter is registered. The entity name should be lowercase.\n"))
-	sb.WriteString(fmt.Sprintf("\t// Note: You might need to make RegisterAdapter public if it's in another package,\n"))
-	sb.WriteString(fmt.Sprintf("\t// or call this registration from your main package.\n"))
+	sb.WriteString("func init() {\n")
+	sb.WriteString("\t// Ensure this adapter is registered. The entity name should be lowercase.\n")
+	sb.WriteString("\t// Note: You might need to make RegisterAdapter public if it's in another package,\n")
+	sb.WriteString("\t// or call this registration from your main package.\n")
 	sb.WriteString(fmt.Sprintf("\t// RegisterAdapter(\"%s\", &%s{})\n", entityNameLower, adapterName))
 	sb.WriteString("}\n")
 

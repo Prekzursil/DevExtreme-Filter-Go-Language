@@ -4,7 +4,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"time" // Needed for timeOperatorHandlers
@@ -69,7 +69,7 @@ type GenericEntAdapter struct {
 
 func NewGenericEntAdapter(entityName string) (*GenericEntAdapter, error) {
 	schemaPath := fmt.Sprintf("./schema_definitions/%s.json", entityName)
-	jsonData, err := ioutil.ReadFile(schemaPath)
+	jsonData, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s for generic ent adapter: %w", schemaPath, err)
 	}
@@ -262,7 +262,7 @@ func buildTimePredicate(field, columnName, opLower string, val interface{}) (Pre
 
 // combinePredicates strips nil predicates, returns nil for empty input,
 // returns the single predicate when only one survives, and otherwise applies
-// ``combiner`` (sql.And or sql.Or). Extracting this shared body removes the
+// “combiner“ (sql.And or sql.Or). Extracting this shared body removes the
 // 15-line duplicated code block qlty + Sonar's CPD detector flagged.
 func combinePredicates(predicates []PredicateFunc, combiner func(...*sql.Predicate) *sql.Predicate) PredicateFunc {
 	validPreds := make([]*sql.Predicate, 0, len(predicates))

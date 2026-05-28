@@ -23,7 +23,7 @@ func TestMain(m *testing.M) {
 	if errOpen != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", errOpen)
 	}
-	defer testClient.Close()
+	defer func() { _ = testClient.Close() }()
 
 	if err := testClient.Schema.Create(context.Background()); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)

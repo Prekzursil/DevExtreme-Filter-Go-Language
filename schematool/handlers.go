@@ -133,18 +133,17 @@ func ListSchemaDefinitionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	files, err := os.ReadDir(SchemaDefinitionsDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			w.Header().Set(headerContentType, mimeApplicationJSON)
-			json.NewEncoder(w).Encode([]string{})
-			return
-		}
+	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Error reading schema_definitions directory: %s", loghelper.Safe(err.Error()))
 		http.Error(w, "Failed to list schema definitions", http.StatusInternalServerError)
 		return
 	}
 
-	var definitionNames []string
+	// A missing directory is treated as an empty set: ``files`` is nil
+	// when os.ReadDir reports os.IsNotExist, so the loop is skipped and an
+	// empty JSON array is returned. This keeps a single encode call (and a
+	// single error branch) for both the missing-dir and populated-dir cases.
+	definitionNames := []string{}
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".json") {
 			definitionNames = append(definitionNames, strings.TrimSuffix(file.Name(), ".json"))
@@ -227,11 +226,11 @@ func isSafeSchemaName(name string) bool {
 // os.Getwd fails, which is virtually untestable on real systems).
 var filepathAbsForSchema = filepath.Abs
 
-// safeSchemaPath returns the cleaned absolute path for ``<base>/<name>.json``
-// only when the resolved path stays inside ``base``. Returning an explicit
+// safeSchemaPath returns the cleaned absolute path for “<base>/<name>.json“
+// only when the resolved path stays inside “base“. Returning an explicit
 // error after a Rel-based containment check is what convinces the Sonar
 // taint analyser (gosecurity:S2083 / CWE-22) that the user-controlled
-// ``name`` cannot reach ``os.WriteFile``/``os.ReadFile``.
+// “name“ cannot reach “os.WriteFile“/“os.ReadFile“.
 func safeSchemaPath(base, name string) (string, error) {
 	if !isSafeSchemaName(name) {
 		return "", fmt.Errorf("unsafe schema name: %q", name)

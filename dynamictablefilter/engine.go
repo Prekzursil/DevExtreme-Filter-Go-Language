@@ -4,7 +4,6 @@ package dynamictablefilter
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,13 +22,13 @@ func GetBaseTablesPath() string {
 	return currentBaseTablesPath
 }
 
-// safeJoinUnderBase joins ``parts`` onto ``currentBaseTablesPath`` and returns
+// safeJoinUnderBase joins “parts“ onto “currentBaseTablesPath“ and returns
 // the cleaned path only if it stays inside the base directory. Returns an
-// error if ``tableName`` (or any ``parts`` element) contains path-traversal
-// characters that would escape ``currentBaseTablesPath``. This is the
-// CWE-22 path-injection mitigation that ``CodeQL go/path-injection`` and
-// ``gosecurity:S2083`` flag at the call sites of ``filepath.Join`` with
-// user-supplied ``tableName`` values.
+// error if “tableName“ (or any “parts“ element) contains path-traversal
+// characters that would escape “currentBaseTablesPath“. This is the
+// CWE-22 path-injection mitigation that “CodeQL go/path-injection“ and
+// “gosecurity:S2083“ flag at the call sites of “filepath.Join“ with
+// user-supplied “tableName“ values.
 // filepathAbs is the indirection used by safeJoinUnderBase to resolve
 // absolute paths. Tests override it to inject filepath.Abs failures
 // (which on real systems only happen if Getwd fails — virtually
@@ -64,7 +63,7 @@ func LoadTableSchema(tableName string) (*TableSchema, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tableName for schema: %w", err)
 	}
-	data, err := ioutil.ReadFile(schemaPath)
+	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
 	}
@@ -84,7 +83,7 @@ func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tableName for data: %w", err)
 	}
-	data, err := ioutil.ReadFile(dataPath)
+	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data file %s: %w", dataPath, err)
 	}
@@ -96,7 +95,7 @@ func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 }
 
 func ListDynamicTables() ([]string, error) {
-	entries, err := ioutil.ReadDir(currentBaseTablesPath) // Use var
+	entries, err := os.ReadDir(currentBaseTablesPath) // Use var
 	if err != nil {
 		if os.IsNotExist(err) {
 			return []string{}, nil

@@ -30,7 +30,7 @@ func TestSeedDatabase_FullSeedPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open fresh sqlite client: %v", err)
 	}
-	defer freshClient.Close()
+	defer func() { _ = freshClient.Close() }()
 
 	originalClient := client
 	client = freshClient

@@ -18,6 +18,14 @@ func withSchemaDir(t *testing.T, dir string) {
 	SchemaDefinitionsDir = dir
 }
 
+// mustWriteFile writes content to path and fails the test on error.
+func mustWriteFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
 func TestListSchemaDefinitionsHandler_DirDoesNotExist(t *testing.T) {
 	// Set SchemaDefinitionsDir to a non-existent path; handler should return 200 + empty list.
 	withSchemaDir(t, "/non/existent/dir/path")
@@ -37,9 +45,15 @@ func TestListSchemaDefinitionsHandler_WithExistingDir(t *testing.T) {
 	dir := t.TempDir()
 	withSchemaDir(t, dir)
 	// Create some sample schema files
-	os.WriteFile(filepath.Join(dir, "user.json"), []byte(`{"entityName":"user","fields":[]}`), 0644)
-	os.WriteFile(filepath.Join(dir, "product.json"), []byte(`{"entityName":"product","fields":[]}`), 0644)
-	os.WriteFile(filepath.Join(dir, "ignored.txt"), []byte(`ignore`), 0644)
+	for name, content := range map[string]string{
+		"user.json":    `{"entityName":"user","fields":[]}`,
+		"product.json": `{"entityName":"product","fields":[]}`,
+		"ignored.txt":  `ignore`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
 	req := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
 	w := httptest.NewRecorder()
 	ListSchemaDefinitionsHandler(w, req)
@@ -58,7 +72,7 @@ func TestListSchemaDefinitionsHandler_WithExistingDir(t *testing.T) {
 func TestLoadSchemaDefinitionHandler_HappyPath(t *testing.T) {
 	dir := t.TempDir()
 	withSchemaDir(t, dir)
-	os.WriteFile(filepath.Join(dir, "TestUser.json"), []byte(`{"entityName":"TestUser","fields":[{"name":"id","type":"int"}]}`), 0644)
+	mustWriteFile(t, filepath.Join(dir, "TestUser.json"), `{"entityName":"TestUser","fields":[{"name":"id","type":"int"}]}`)
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=TestUser", nil)
 	w := httptest.NewRecorder()
 	LoadSchemaDefinitionHandler(w, req)
@@ -73,7 +87,7 @@ func TestLoadSchemaDefinitionHandler_HappyPath(t *testing.T) {
 func TestLoadSchemaDefinitionHandler_BadJsonOnDisk(t *testing.T) {
 	dir := t.TempDir()
 	withSchemaDir(t, dir)
-	os.WriteFile(filepath.Join(dir, "Broken.json"), []byte(`not-json`), 0644)
+	mustWriteFile(t, filepath.Join(dir, "Broken.json"), `not-json`)
 	req := httptest.NewRequest(http.MethodGet, "/load-schema-definition?name=Broken", nil)
 	w := httptest.NewRecorder()
 	LoadSchemaDefinitionHandler(w, req)
