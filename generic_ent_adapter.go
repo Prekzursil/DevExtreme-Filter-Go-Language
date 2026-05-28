@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time" // Needed for timeOperatorHandlers
@@ -68,7 +69,12 @@ type GenericEntAdapter struct {
 }
 
 func NewGenericEntAdapter(entityName string) (*GenericEntAdapter, error) {
-	schemaPath := fmt.Sprintf("./schema_definitions/%s.json", entityName)
+	// filepath.Base strips any directory component (including ../ traversal
+	// segments) from the user-influenced entityName, so the resolved path is
+	// always a direct child of ./schema_definitions and cannot escape it
+	// (gosec G304 / CWE-22 hardening).
+	schemaPath := filepath.Join("./schema_definitions", filepath.Base(entityName)+".json")
+	// #nosec G304 -- entityName is reduced to its base name via filepath.Base and scoped to ./schema_definitions; traversal is impossible.
 	jsonData, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s for generic ent adapter: %w", schemaPath, err)

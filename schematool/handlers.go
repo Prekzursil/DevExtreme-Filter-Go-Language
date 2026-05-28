@@ -97,7 +97,7 @@ func writeGeneratedSchemaResponse(w http.ResponseWriter, req SchemaRequest) bool
 var jsonMarshalIndentFn = json.MarshalIndent
 
 func persistSchemaRequest(req SchemaRequest) {
-	if err := os.MkdirAll(SchemaDefinitionsDir, 0755); err != nil {
+	if err := os.MkdirAll(SchemaDefinitionsDir, 0750); err != nil {
 		log.Printf("Error creating schema_definitions directory: %s", loghelper.Safe(err.Error()))
 		return
 	}
@@ -118,7 +118,7 @@ func persistSchemaRequest(req SchemaRequest) {
 		log.Printf("Error marshalling schema definition for saving: %s", loghelper.Safe(marshalErr.Error()))
 		return
 	}
-	if err := os.WriteFile(filePath, fileData, 0644); err != nil {
+	if err := os.WriteFile(filePath, fileData, 0600); err != nil {
 		log.Printf("Error writing schema definition file %q: %s", filePath, loghelper.Safe(err.Error()))
 	} else {
 		log.Printf("Saved schema definition to %q", filePath)
@@ -177,6 +177,7 @@ func LoadSchemaDefinitionHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid 'name' query parameter", http.StatusBadRequest)
 		return
 	}
+	// #nosec G304 -- filePath is produced by safeSchemaPath, which rejects any name failing isSafeSchemaName (no slashes, no "..") and enforces a filepath.Rel containment check scoped to SchemaDefinitionsDir, so traversal is impossible.
 	fileData, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {

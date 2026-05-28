@@ -63,6 +63,7 @@ func LoadTableSchema(tableName string) (*TableSchema, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tableName for schema: %w", err)
 	}
+	// #nosec G304 -- schemaPath is produced by safeJoinUnderBase, which enforces a filepath.Rel containment check so the path cannot escape currentBaseTablesPath (./tables); traversal is impossible.
 	data, err := os.ReadFile(schemaPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read schema file %s: %w", schemaPath, err)
@@ -83,6 +84,7 @@ func LoadTableData(tableName string) ([]map[string]interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid tableName for data: %w", err)
 	}
+	// #nosec G304 -- dataPath is produced by safeJoinUnderBase, which enforces a filepath.Rel containment check so the path cannot escape currentBaseTablesPath (./tables); traversal is impossible.
 	data, err := os.ReadFile(dataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data file %s: %w", dataPath, err)
