@@ -1,0 +1,31 @@
+# golangci-lint v2 config for the lean gate-1 (lint + format).
+# v2 schema: `version: "2"`, linters/formatters split into their own blocks.
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  # standard set = errcheck, govet, ineffassign, staticcheck, unused.
+  exclusions:
+    generated: lax
+    paths:
+      - ent
+      - vendor
+      - static
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - ent
+      - vendor
+      - static
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

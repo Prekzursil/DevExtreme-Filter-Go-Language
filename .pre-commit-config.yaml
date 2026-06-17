@@ -1,0 +1,46 @@
+# Lean quality gates — local auto-fixers + fast checks for this Go module.
+# `pre-commit run --all-files` is the gate-1 / gate-3 / gate-5 entrypoint used by
+# CI (.github/workflows/quality.yml -> reusable-quality.yml). Every rev is pinned;
+# bump versions here together with quality.yml.
+minimum_pre_commit_version: "3.5.0"
+
+exclude: |-
+  (?x)^(
+    ent/|
+    vendor/|
+    static/|
+    \.qlty/|
+    tests\.exe$|
+    test_output\.log$
+  )
+
+repos:
+  # --- Gate 1: Go lint + format + imports (golangci-lint v2, AUTOFIX) ---
+  # golangci-lint v2 bundles gofmt/gofumpt + goimports (formatters) and the
+  # standard analyzers; `--fix` applies the autofixable results.
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.6.2
+    hooks:
+      - id: golangci-lint-full
+        name: golangci-lint (lint + format, --fix)
+        args: ["--fix"]
+
+  # --- Gate 5: secrets (gitleaks 8.30.1, pinned) ---
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secrets)
+        args: ["--config", ".gitleaks.toml"]
+
+  # --- Gate 3: tests + coverage (STRICT 100% line, Go) ---
+  # Local hook so CI and `scripts/verify` share one source of truth. Go reports
+  # statement coverage; the script fails the gate below 100.0%.
+  - repo: local
+    hooks:
+      - id: go-test-cover-100
+        name: go test + 100% coverage gate
+        entry: bash scripts/coverage-gate.sh
+        language: system
+        pass_filenames: false
+        always_run: true

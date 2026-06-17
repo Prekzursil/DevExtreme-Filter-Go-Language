@@ -1,0 +1,29 @@
+# Lean 6-gate charter manifest (decided 2026-06-16). Declares the closed set of
+# active gates for this repo so charter_check.sh can fail if the active gate set
+# drifts from the charter. ADDITIVE: documents the lean gate; does not flip any
+# branch-protection / required-status contexts (deferred to the migration runbook).
+charter_version: "2026-06-16"
+languages:
+  - go
+gates:
+  lint_format_sec_lint:
+    enabled: true
+    tools: [golangci-lint-v2, gitleaks]   # gate 1 + gate 5 (via pre-commit)
+  types:
+    enabled: false                        # n/a for Go (compiler enforces types)
+  tests_coverage:
+    enabled: true
+    policy: "100% line (Go statement coverage), hand-written packages"
+    runner: scripts/coverage-gate.sh
+  sast:
+    enabled: true
+    tool: opengrep
+    ruleset: .quality/opengrep
+  secrets:
+    enabled: true
+    tool: gitleaks
+    config: .gitleaks.toml
+  deps:
+    enabled: true
+    tools: [osv-scanner, dependabot]
+    config: osv-scanner.toml
