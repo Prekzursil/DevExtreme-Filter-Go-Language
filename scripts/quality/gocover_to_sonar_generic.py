@@ -27,6 +27,7 @@ Usage:
         --module transaction-filter-backend \
         --out coverage-sonar.xml
 """
+
 from __future__ import annotations
 
 import argparse
