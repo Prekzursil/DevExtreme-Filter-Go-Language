@@ -1,0 +1,55 @@
+# Small pinned in-repo SAST ruleset for the lean gate-4 (opengrep / Semgrep CE).
+# Go-focused, high-signal rules only. Keep this set minimal and curated; the gate
+# runs `opengrep scan --config .quality/opengrep --error` and must report 0.
+rules:
+  - id: go-sql-string-concat
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Possible SQL injection: SQL query built via string concatenation/format.
+      Use parameterized queries or a query builder (e.g. ent predicates) instead.
+    patterns:
+      - pattern-either:
+          - pattern: $DB.Query(fmt.Sprintf(...), ...)
+          - pattern: $DB.QueryContext($CTX, fmt.Sprintf(...), ...)
+          - pattern: $DB.Exec(fmt.Sprintf(...), ...)
+          - pattern: $DB.ExecContext($CTX, fmt.Sprintf(...), ...)
+
+  - id: go-exec-command-with-variable
+    languages: [go]
+    severity: WARNING
+    message: >-
+      Command executed with a non-literal argument. Validate/allowlist the input
+      to avoid command injection.
+    patterns:
+      - pattern-either:
+          - pattern: exec.Command($CMD, ...)
+          - pattern: exec.CommandContext($CTX, $CMD, ...)
+      - metavariable-pattern:
+          metavariable: $CMD
+          patterns:
+            - pattern-not: '"..."'
+
+  - id: go-weak-rand-for-security
+    languages: [go]
+    severity: WARNING
+    message: >-
+      math/rand is not cryptographically secure. Use crypto/rand for tokens,
+      secrets, or any security-sensitive randomness.
+    patterns:
+      - pattern-either:
+          - pattern: math/rand.Read(...)
+          - pattern: rand.Read(...)
+    paths:
+      exclude:
+        - ent/
+        - vendor/
+
+  - id: go-tls-insecure-skip-verify
+    languages: [go]
+    severity: ERROR
+    message: >-
+      InsecureSkipVerify disables TLS certificate verification (MITM risk).
+      Remove it or scope it to test-only code with justification.
+    patterns:
+      - pattern: "InsecureSkipVerify: true"

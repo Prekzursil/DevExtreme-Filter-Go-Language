@@ -1,0 +1,34 @@
+# Lean 6-gate quality (thin caller).
+#
+# Delegates to the shared reusable lean-gate workflow in
+# Prekzursil/quality-zero-platform. The template auto-detects the languages in
+# this repo (Go here) and runs only the lanes whose config/toolchain is present:
+#   1. lint+format+imports+sec-lint (pre-commit: golangci-lint v2 + gitleaks)
+#   2. types        (n/a for Go)
+#   3. tests+cov    (100% line+branch — Go suite via pre-commit go-test-cover hook)
+#   4. SAST         (opengrep, .quality/opengrep ruleset)
+#   5. secrets      (gitleaks, .gitleaks.toml)
+#   6. deps         (osv-scanner, osv-scanner.toml + Dependabot)
+#
+# Pinned to the template branch so this PR's CI is real now; the migration
+# runbook re-pins this to a release tag after the template merges to main.
+name: quality
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    permissions:
+      contents: read
+    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-quality.yml@v1
