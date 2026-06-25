@@ -6,46 +6,38 @@ import (
 
 // More edge cases to push coverage of small helpers.
 
-func TestApplyGroupFilter_FirstNotArray(t *testing.T) {
-	record := map[string]interface{}{"id": float64(1)}
-	schema := makeTestSchema()
-	_, err := applyFilterRecursive(record, schema, []interface{}{
-		"not-an-array", // first item is a string, not []interface{}
-		"and",
-		[]interface{}{"id", "=", 1},
-	})
-	// applyGroupFilter casts the first element to []interface{} — this should fail.
-	// applyFilterRecursive treats the first string as op, so isLeafCondition first?
-	// 3 elements with first = string => isLeafCondition true and tries leaf path
-	// which calls applyLeafCondition with field="not-an-array" (unknown). Let's allow either error.
-	if err == nil {
-		t.Error("expected error for malformed group")
+// TestApplyGroupFilter_MalformedGroups exercises the error paths in the group
+// filter walker for malformed filter trees: a non-array first element, a
+// non-string operator, and a non-array condition operand. Driving them through
+// one table keeps the shared record/schema/applyFilterRecursive setup in a
+// single place.
+func TestApplyGroupFilter_MalformedGroups(t *testing.T) {
+	tests := []struct {
+		name   string
+		filter []interface{}
+	}{
+		{
+			// First item is a string, not []interface{}; applyFilterRecursive
+			// treats it as a leaf field name ("not-an-array") which is unknown.
+			name:   "first not array",
+			filter: []interface{}{"not-an-array", "and", []interface{}{"id", "=", 1}},
+		},
+		{
+			name:   "operator not string",
+			filter: []interface{}{[]interface{}{"id", "=", 1}, 123, []interface{}{"id", "=", 2}},
+		},
+		{
+			name:   "condition not array",
+			filter: []interface{}{[]interface{}{"id", "=", 1}, "and", "not-an-array"},
+		},
 	}
-}
-
-func TestApplyGroupFilter_OperatorNotString(t *testing.T) {
-	record := map[string]interface{}{"id": float64(1)}
-	schema := makeTestSchema()
-	_, err := applyFilterRecursive(record, schema, []interface{}{
-		[]interface{}{"id", "=", 1},
-		123, // operator is int, not string
-		[]interface{}{"id", "=", 2},
-	})
-	if err == nil {
-		t.Error("expected error for non-string operator")
-	}
-}
-
-func TestApplyGroupFilter_ConditionNotArray(t *testing.T) {
-	record := map[string]interface{}{"id": float64(1)}
-	schema := makeTestSchema()
-	_, err := applyFilterRecursive(record, schema, []interface{}{
-		[]interface{}{"id", "=", 1},
-		"and",
-		"not-an-array", // condition is string, not array
-	})
-	if err == nil {
-		t.Error("expected error for non-array condition operand")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			record := map[string]interface{}{"id": float64(1)}
+			if _, err := applyFilterRecursive(record, makeTestSchema(), tc.filter); err == nil {
+				t.Errorf("expected error for malformed group %q", tc.name)
+			}
+		})
 	}
 }
 

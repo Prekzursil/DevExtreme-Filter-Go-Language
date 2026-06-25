@@ -82,10 +82,7 @@ func TestSafeSchemaPath_HappyPath(t *testing.T) {
 // branch for "schema_definitions directory not yet created" (lines 140-142):
 // the handler responds 200 with an empty JSON list rather than a 500.
 func TestListSchemaDefinitionsHandler_DirMissing(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = filepath.Join(dir, "does-not-exist")
-	defer func() { SchemaDefinitionsDir = original }()
+	withSchemaDir(t, filepath.Join(t.TempDir(), "does-not-exist"))
 
 	r := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
 	w := httptest.NewRecorder()
@@ -100,14 +97,11 @@ func TestListSchemaDefinitionsHandler_DirMissing(t *testing.T) {
 
 // TestPersistSchemaRequest_UnsafeEntityNameRejected exercises the
 // gosecurity:S2083 guard: an entity name containing a path-traversal
-// fragment must short-circuit ``persistSchemaRequest`` before any
+// fragment must short-circuit “persistSchemaRequest“ before any
 // filesystem call. We assert the guard by pointing SchemaDefinitionsDir
 // at a temp dir and verifying nothing gets written there.
 func TestPersistSchemaRequest_UnsafeEntityNameRejected(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
+	dir := useTempSchemaDir(t)
 
 	for _, name := range []string{"", ".", "..", "../etc/passwd", "foo/bar", `foo\bar`} {
 		persistSchemaRequest(SchemaRequest{
@@ -129,16 +123,9 @@ func TestPersistSchemaRequest_UnsafeEntityNameRejected(t *testing.T) {
 // pointing SchemaDefinitionsDir at a path whose parent is a regular file.
 // MkdirAll returns ENOTDIR, exercising the early-return error branch.
 func TestPersistSchemaRequest_MkdirError(t *testing.T) {
-	dir := t.TempDir()
-	regularFile := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(regularFile, []byte("x"), 0644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	original := SchemaDefinitionsDir
+	regularFile := regularFileBlocker(t, t.TempDir())
 	// Try to mkdir a path under a regular file.
-	SchemaDefinitionsDir = filepath.Join(regularFile, "definitions")
-	defer func() { SchemaDefinitionsDir = original }()
+	withSchemaDir(t, filepath.Join(regularFile, "definitions"))
 
 	persistSchemaRequest(SchemaRequest{
 		EntityName: "Foo",
@@ -155,10 +142,7 @@ func TestPersistSchemaRequest_MkdirError(t *testing.T) {
 // creating the SchemaDefinitionsDir directory but with a name that
 // already exists as a directory inside it.
 func TestPersistSchemaRequest_WriteFileFails(t *testing.T) {
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
+	dir := useTempSchemaDir(t)
 
 	// Create a directory at "Foo.json" — os.WriteFile will fail since it
 	// can't write a file over a directory.
@@ -180,15 +164,8 @@ func TestListSchemaDefinitionsHandler_BasePathIsFile(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("ReadDir on a regular file returns different error on Windows; gate runs on Linux CI")
 	}
-	dir := t.TempDir()
-	regularFile := filepath.Join(dir, "blocker")
-	if err := os.WriteFile(regularFile, []byte("x"), 0644); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = regularFile
-	defer func() { SchemaDefinitionsDir = original }()
+	regularFile := regularFileBlocker(t, t.TempDir())
+	withSchemaDir(t, regularFile)
 
 	r := httptest.NewRequest(http.MethodGet, "/list-schema-definitions", nil)
 	w := httptest.NewRecorder()
@@ -206,10 +183,7 @@ func TestLoadSchemaDefinitionHandler_NonNotExistReadError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Read on a directory returns different error on Windows; gate runs on Linux CI")
 	}
-	dir := t.TempDir()
-	original := SchemaDefinitionsDir
-	SchemaDefinitionsDir = dir
-	defer func() { SchemaDefinitionsDir = original }()
+	dir := useTempSchemaDir(t)
 
 	// Pre-create a directory at the target file path so ReadFile fails
 	// with EISDIR (not ENOENT).

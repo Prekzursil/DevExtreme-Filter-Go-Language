@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,8 +9,7 @@ import (
 // Edge cases to push filterHandler coverage above 64.3%.
 
 func TestFilterHandler_AdapterNotFound(t *testing.T) {
-	body := []byte(`{"entity":"never-registered-entity-name","filter":[]}`)
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterRequestRaw(`{"entity":"never-registered-entity-name","filter":[]}`)
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	// GetAdapter returns error for unknown entity → 400
@@ -22,8 +20,7 @@ func TestFilterHandler_AdapterNotFound(t *testing.T) {
 
 func TestFilterHandler_BadFilterShape(t *testing.T) {
 	// Filter shape is invalid (not array) - ParseFilterToPredicates returns error
-	body := []byte(`{"entity":"transaction","filter":"not-an-array"}`)
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterRequestRaw(`{"entity":"transaction","filter":"not-an-array"}`)
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusInternalServerError {
@@ -33,8 +30,7 @@ func TestFilterHandler_BadFilterShape(t *testing.T) {
 
 func TestFilterHandler_LowercaseUnsupportedEntity(t *testing.T) {
 	// Lowercase variant - runFilterQuery hits the default case
-	body := []byte(`{"entity":"NotARealEntity","filter":[]}`)
-	r := httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+	r := newFilterRequestRaw(`{"entity":"NotARealEntity","filter":[]}`)
 	w := httptest.NewRecorder()
 	filterHandler(w, r)
 	if w.Code != http.StatusBadRequest {

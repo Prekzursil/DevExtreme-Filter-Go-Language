@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,19 +19,51 @@ func withDynamicTablesPath(t *testing.T, dir string) {
 	dynamictablefilter.SetBaseTablesPath(dir)
 }
 
-func writeTablesDir(t *testing.T, base, table, schemaJson, dataJson string) {
+// newFilterRequest builds a POST /filter request whose JSON body carries the
+// given entity name and filter payload. It centralises the marshal +
+// httptest.NewRequest boilerplate shared across the filterHandler tests.
+func newFilterRequest(t *testing.T, entity string, filter interface{}) *http.Request {
+	t.Helper()
+	body, err := json.Marshal(map[string]interface{}{
+		"entity": entity,
+		"filter": filter,
+	})
+	if err != nil {
+		t.Fatalf("marshalling filter request: %v", err)
+	}
+	return httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(body))
+}
+
+// newFilterRequestRaw builds a POST /filter request with a raw (possibly
+// malformed) JSON body, for tests that deliberately exercise invalid shapes.
+func newFilterRequestRaw(body string) *http.Request {
+	return httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader([]byte(body)))
+}
+
+// newFilterBodyRequest builds a POST /filter request from a typed
+// filterRequestBody, marshalling it to JSON and failing the test on error.
+func newFilterBodyRequest(t *testing.T, body filterRequestBody) *http.Request {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshalling filterRequestBody: %v", err)
+	}
+	return httptest.NewRequest(http.MethodPost, "/filter", bytes.NewReader(raw))
+}
+
+func writeTablesDir(t *testing.T, base, table, schemaJSON, dataJSON string) {
 	t.Helper()
 	tableDir := filepath.Join(base, table)
-	if err := os.MkdirAll(tableDir, 0755); err != nil {
+	if err := os.MkdirAll(tableDir, 0750); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if schemaJson != "" {
-		if err := os.WriteFile(filepath.Join(tableDir, "schema.json"), []byte(schemaJson), 0644); err != nil {
+	if schemaJSON != "" {
+		if err := os.WriteFile(filepath.Join(tableDir, "schema.json"), []byte(schemaJSON), 0600); err != nil {
 			t.Fatalf("write schema: %v", err)
 		}
 	}
-	if dataJson != "" {
-		if err := os.WriteFile(filepath.Join(tableDir, "data.json"), []byte(dataJson), 0644); err != nil {
+	if dataJSON != "" {
+		if err := os.WriteFile(filepath.Join(tableDir, "data.json"), []byte(dataJSON), 0600); err != nil {
 			t.Fatalf("write data: %v", err)
 		}
 	}

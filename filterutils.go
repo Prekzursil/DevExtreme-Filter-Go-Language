@@ -192,4 +192,3 @@ func combineGroupPredicates(adapter EntityAdapter, predicates []PredicateFunc, o
 // convertToFloat64, plus the per-type dispatchers and pure-string parsers)
 // were split out into filterconv.go so that this file's qlty "high total
 // complexity" stays below the smell threshold. The behavior is identical.
-

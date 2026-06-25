@@ -17,7 +17,7 @@ func TestSeedDatabase_SchemaCreateError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open client: %v", err)
 	}
-	closedClient.Close() // closes immediately, schema-create will error
+	_ = closedClient.Close() // closes immediately, schema-create will error
 
 	originalClient := client
 	client = closedClient

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func generateTransactions(count int, ctx context.Context) {
+func generateTransactions(ctx context.Context, count int) {
 	locations := []string{"New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Philadelphia"}
 	categories := []string{"Groceries", "Dining", "Food & Drink", "Income", "Shopping", "Bills", "Transportation", "Entertainment", "Housing", "Health"}
 	types := []string{"Debit", "Credit"}
@@ -31,7 +31,7 @@ func generateTransactions(count int, ctx context.Context) {
 	log.Printf("Generated %d transactions", count)
 }
 
-func generateTest1SchemaData(count int, ctx context.Context) {
+func generateTest1SchemaData(ctx context.Context, count int) {
 	for i := 0; i < count; i++ {
 		client.Test1Schema.Create().
 			SetFieldString(fmt.Sprintf("T1 String %d", i)).
@@ -45,7 +45,7 @@ func generateTest1SchemaData(count int, ctx context.Context) {
 	log.Printf("Generated %d Test1Schema records", count)
 }
 
-func generateTest2SchemaData(count int, ctx context.Context) {
+func generateTest2SchemaData(ctx context.Context, count int) {
 	itemTypes := []string{"Gadget", "Widget", "Accessory", "Component", "Tool"}
 	for i := 0; i < count; i++ {
 		client.Test2Schema.Create().
@@ -62,7 +62,7 @@ func generateTest2SchemaData(count int, ctx context.Context) {
 	log.Printf("Generated %d Test2Schema records", count)
 }
 
-func generateTest3SchemaData(count int, ctx context.Context) {
+func generateTest3SchemaData(ctx context.Context, count int) {
 	tagOptions := [][]string{
 		{"tech", "new", "featured"}, {"books", "classic"}, {"apparel", "sale", "cotton"},
 		{"home", "decor"}, {"sports", "outdoor", "gear"},

@@ -42,7 +42,7 @@ func init() {
 
 // bootstrapPackage is the testable body of init(). Pulled out so the
 // log-fatal branch (when openClient errors) can be exercised by a
-// unit test that stubs ``fatalLogger`` to a non-terminating logger.
+// unit test that stubs “fatalLogger“ to a non-terminating logger.
 // Real init() goes through log.Fatalf via fatalLogger which calls
 // os.Exit(1) — tests redirect to log.Printf to avoid terminating the
 // test process.
@@ -153,10 +153,10 @@ func seedDatabase(ctx context.Context) error {
 	if existing, _ := client.Transaction.Query().Count(ctx); existing > 0 {
 		return nil
 	}
-	generateTransactions(100, ctx)
-	generateTest1SchemaData(100, ctx)
-	generateTest2SchemaData(100, ctx)
-	generateTest3SchemaData(100, ctx)
+	generateTransactions(ctx, 100)
+	generateTest1SchemaData(ctx, 100)
+	generateTest2SchemaData(ctx, 100)
+	generateTest3SchemaData(ctx, 100)
 	return nil
 }
 
@@ -202,17 +202,29 @@ func registerStaticRoutes(mux *http.ServeMux) {
 }
 
 // serveBackend starts the backend HTTP(S) listener. If both
-// ``BACKEND_TLS_CERT`` and ``BACKEND_TLS_KEY`` env vars are set, it uses
-// ``ListenAndServeTLS`` (CWE-319 mitigation per Semgrep
-// ``go.lang.security.audit.net.use-tls``). Otherwise it falls back to
-// plaintext ``ListenAndServe`` for local dev. Production deployments
+// “BACKEND_TLS_CERT“ and “BACKEND_TLS_KEY“ env vars are set, it uses
+// “ListenAndServeTLS“ (CWE-319 mitigation per Semgrep
+// “go.lang.security.audit.net.use-tls“). Otherwise it falls back to
+// plaintext “ListenAndServe“ for local dev. Production deployments
 // should always set the TLS env vars or place a TLS-terminating reverse
 // proxy in front of this binary.
 func serveBackend(addr string, handler http.Handler) error {
 	cert := os.Getenv("BACKEND_TLS_CERT")
 	key := os.Getenv("BACKEND_TLS_KEY")
-	if cert != "" && key != "" {
-		return http.ListenAndServeTLS(addr, cert, key, handler)
+	// Construct an explicit http.Server with timeouts so a slow or
+	// malicious client cannot hold a connection open indefinitely
+	// (gosec G114 / CWE-676 Slowloris hardening). ReadHeaderTimeout in
+	// particular bounds the time spent reading request headers.
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
-	return http.ListenAndServe(addr, handler) // nosemgrep: go.lang.security.audit.net.use-tls.use-tls — local-dev fallback path documented above
+	if cert != "" && key != "" {
+		return srv.ListenAndServeTLS(cert, key)
+	}
+	return srv.ListenAndServe() // nosemgrep: go.lang.security.audit.net.use-tls.use-tls — local-dev fallback path documented above
 }

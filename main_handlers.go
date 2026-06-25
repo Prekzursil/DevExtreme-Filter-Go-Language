@@ -18,10 +18,10 @@ import (
 )
 
 // HTTP header constants extracted to satisfy go:S1192 ("Define a constant
-// instead of duplicating this literal N times") for ``"Content-Type"`` and
-// ``"application/json"`` which appear 5 times each in handler responses.
+// instead of duplicating this literal N times") for “"Content-Type"“ and
+// “"application/json"“ which appear 5 times each in handler responses.
 const (
-	headerContentType = "Content-Type"
+	headerContentType   = "Content-Type"
 	mimeApplicationJSON = "application/json"
 )
 
@@ -36,7 +36,7 @@ type filterRequestBody struct {
 // "unsupported entity" branch is covered by GetAdapter; this hook
 // drives the actual-query-error path at line 121-122 in
 // main_handlers.go).
-var filterContext = func() context.Context { return context.Background() }
+var filterContext = context.Background
 
 func decodeFilterRequest(r *http.Request) (*filterRequestBody, int, error) {
 	if r.Method != http.MethodPost {
@@ -178,19 +178,42 @@ func dynamicTablesItemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tableName := pathParts[0]
-	if len(pathParts) == 1 && r.Method == http.MethodGet {
+	switch dynamicTableRoute(pathParts, r.Method) {
+	case dynamicRouteEndpointMissing:
 		http.Error(w, "Specify /schema or /filter endpoint", http.StatusBadRequest)
-		return
-	}
-	if len(pathParts) == 2 && pathParts[1] == "schema" && r.Method == http.MethodGet {
+	case dynamicRouteSchema:
 		dynamicTableSchemaHandler(w, tableName)
-		return
-	}
-	if len(pathParts) == 2 && pathParts[1] == "filter" && r.Method == http.MethodPost {
+	case dynamicRouteFilter:
 		dynamicTableFilterHandler(w, r, tableName)
-		return
+	default:
+		http.NotFound(w, r)
 	}
-	http.NotFound(w, r)
+}
+
+type dynamicTableRouteKind int
+
+const (
+	dynamicRouteNotFound dynamicTableRouteKind = iota
+	dynamicRouteEndpointMissing
+	dynamicRouteSchema
+	dynamicRouteFilter
+)
+
+// dynamicTableRoute classifies a /dynamic-tables/<table>[/endpoint] request
+// into the action dynamicTablesItemHandler should dispatch. Extracting the
+// branch ladder keeps the handler's cyclomatic complexity at or below the
+// gocyclo threshold.
+func dynamicTableRoute(pathParts []string, method string) dynamicTableRouteKind {
+	switch {
+	case len(pathParts) == 1 && method == http.MethodGet:
+		return dynamicRouteEndpointMissing
+	case len(pathParts) == 2 && pathParts[1] == "schema" && method == http.MethodGet:
+		return dynamicRouteSchema
+	case len(pathParts) == 2 && pathParts[1] == "filter" && method == http.MethodPost:
+		return dynamicRouteFilter
+	default:
+		return dynamicRouteNotFound
+	}
 }
 
 func dynamicTableSchemaHandler(w http.ResponseWriter, tableName string) {

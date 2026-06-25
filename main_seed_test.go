@@ -13,7 +13,7 @@ func TestGenerateTransactions(t *testing.T) {
 			t.Errorf("generateTransactions panicked: %v", r)
 		}
 	}()
-	generateTransactions(2, context.Background())
+	generateTransactions(context.Background(), 2)
 }
 
 func TestGenerateTest1SchemaData(t *testing.T) {
@@ -22,7 +22,7 @@ func TestGenerateTest1SchemaData(t *testing.T) {
 			t.Errorf("generateTest1SchemaData panicked: %v", r)
 		}
 	}()
-	generateTest1SchemaData(2, context.Background())
+	generateTest1SchemaData(context.Background(), 2)
 }
 
 func TestGenerateTest2SchemaData(t *testing.T) {
@@ -31,7 +31,7 @@ func TestGenerateTest2SchemaData(t *testing.T) {
 			t.Errorf("generateTest2SchemaData panicked: %v", r)
 		}
 	}()
-	generateTest2SchemaData(2, context.Background())
+	generateTest2SchemaData(context.Background(), 2)
 }
 
 func TestGenerateTest3SchemaData(t *testing.T) {
@@ -40,5 +40,5 @@ func TestGenerateTest3SchemaData(t *testing.T) {
 			t.Errorf("generateTest3SchemaData panicked: %v", r)
 		}
 	}()
-	generateTest3SchemaData(2, context.Background())
+	generateTest3SchemaData(context.Background(), 2)
 }

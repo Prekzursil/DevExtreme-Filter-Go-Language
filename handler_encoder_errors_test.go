@@ -4,37 +4,18 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"transaction-filter-backend/dynamictablefilter"
+	"transaction-filter-backend/internal/httptestutil"
 )
 
-// failingResponseWriter is an http.ResponseWriter that errors on Write.
-// It's used to drive the "encoder error" branches in listFilterableEntities,
+// failingResponseWriter is the shared test double that errors on Write. It's
+// used to drive the "encoder error" branches in listFilterableEntities,
 // listDynamicTablesHandler, dynamicTableSchemaHandler, and
 // dynamicTableFilterHandler — branches that just log and continue.
-type failingResponseWriter struct {
-	headers    http.Header
-	statusCode int
-}
-
-func (f *failingResponseWriter) Header() http.Header {
-	if f.headers == nil {
-		f.headers = make(http.Header)
-	}
-	return f.headers
-}
-
-func (f *failingResponseWriter) Write(p []byte) (int, error) {
-	return 0, errors.New("synthetic write failure")
-}
-
-func (f *failingResponseWriter) WriteHeader(statusCode int) {
-	f.statusCode = statusCode
-}
+type failingResponseWriter = httptestutil.FailingResponseWriter
 
 func TestListFilterableEntitiesHandler_EncoderErrorPath(t *testing.T) {
 	r := httptest.NewRequest(http.MethodGet, "/list-filterable-entities", nil)
@@ -45,9 +26,7 @@ func TestListFilterableEntitiesHandler_EncoderErrorPath(t *testing.T) {
 
 func TestListDynamicTablesHandler_EncoderErrorPath(t *testing.T) {
 	dir := t.TempDir()
-	original := dynamictablefilter.GetBaseTablesPath()
-	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
-	dynamictablefilter.SetBaseTablesPath(dir)
+	withDynamicTablesPath(t, dir)
 
 	r := httptest.NewRequest(http.MethodGet, "/dynamic-tables", nil)
 	listDynamicTablesHandler(&failingResponseWriter{}, r)
@@ -81,9 +60,7 @@ func TestDynamicTableSchemaHandler_EncoderErrorPath(t *testing.T) {
 	dir := t.TempDir()
 	writeTablesDir(t, dir, "items",
 		`{"entityName":"Item","fields":[{"name":"id","type":"int"}]}`, "")
-	original := dynamictablefilter.GetBaseTablesPath()
-	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
-	dynamictablefilter.SetBaseTablesPath(dir)
+	withDynamicTablesPath(t, dir)
 
 	dynamicTableSchemaHandler(&failingResponseWriter{}, "items")
 }
@@ -95,9 +72,7 @@ func TestDynamicTableFilterHandler_EncoderErrorPath(t *testing.T) {
 	writeTablesDir(t, dir, "items",
 		`{"entityName":"Item","fields":[{"name":"id","type":"int"}]}`,
 		`[{"id":1}]`)
-	original := dynamictablefilter.GetBaseTablesPath()
-	t.Cleanup(func() { dynamictablefilter.SetBaseTablesPath(original) })
-	dynamictablefilter.SetBaseTablesPath(dir)
+	withDynamicTablesPath(t, dir)
 
 	r := httptest.NewRequest(http.MethodPost, "/dynamic-tables/items/filter",
 		bytes.NewReader([]byte(`{"filter":[]}`)))

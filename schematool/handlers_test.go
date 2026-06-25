@@ -39,11 +39,7 @@ func TestGenerateSchemaCodeHandler_RejectsEmptyEntity(t *testing.T) {
 
 func TestGenerateSchemaCodeHandler_HappyPath(t *testing.T) {
 	t.Setenv("PWD", t.TempDir())
-	body, _ := json.Marshal(SchemaRequest{
-		EntityName: "TestEntity",
-		Fields:     []SchemaFieldDefinition{{Name: "id", Type: "int"}},
-	})
-	req := httptest.NewRequest(http.MethodPost, "/generate-schema-code", bytes.NewReader(body))
+	req := newSchemaCodeRequest(t, "TestEntity")
 	w := httptest.NewRecorder()
 	GenerateSchemaCodeHandler(w, req)
 	// May be 200 or 500 depending on file-system permissions in test env;

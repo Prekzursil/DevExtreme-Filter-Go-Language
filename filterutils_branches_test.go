@@ -70,4 +70,3 @@ func TestCollectGroupItems_RejectsInvalidOperator(t *testing.T) {
 		t.Error("expected error for invalid logical operator in group")
 	}
 }
-

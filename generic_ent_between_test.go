@@ -44,4 +44,3 @@ func TestGetPredicateForField_BetweenFloatBadUpper(t *testing.T) {
 		t.Error("expected error for bad upper float bound")
 	}
 }
-
