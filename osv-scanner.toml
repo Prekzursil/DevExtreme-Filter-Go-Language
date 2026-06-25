@@ -1,0 +1,4 @@
+# osv-scanner config for the lean deps gate (gate 6). Pinned tool: osv-scanner v2.
+# Scans go.mod/go.sum; Dependabot (.github/dependabot.yml) handles the updates.
+# Add reasoned [[IgnoredVulns]] entries here ONLY for vulnerabilities that are
+# not reachable / not applicable, each with an `id` + `reason`. None currently.
