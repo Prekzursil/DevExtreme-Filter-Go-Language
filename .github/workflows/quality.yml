@@ -1,3 +1,4 @@
+# DO NOT MERGE - evidence branch for the quality-zero-platform v1 tag-move decision (paired A/B; sibling branch differs only in the reusable pin).
 # Lean 6-gate quality (thin caller).
 #
 # Delegates to the shared reusable lean-gate workflow in
