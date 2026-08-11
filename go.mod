@@ -1,6 +1,6 @@
 module transaction-filter-backend
 
-go 1.25.11
+go 1.25.12
 
 require (
 	entgo.io/ent v0.14.6
@@ -21,7 +21,7 @@ require (
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
-	golang.org/x/mod v0.24.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
