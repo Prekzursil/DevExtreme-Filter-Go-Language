@@ -1,0 +1,57 @@
+# opengrep / semgrep ignore — gate 4 (SAST). Adopted from
+# quality-zero-platform docs/lean-gate/semgrepignore.template.
+#
+# ── WHY THIS FILE IS LOAD-BEARING HERE IN PARTICULAR ────────────────────────
+#
+# With NO `.semgrepignore` in the scanned root, opengrep falls back to a
+# BUILT-IN ignore template that drops `*_test.go` AT ANY DEPTH. Measured
+# 2026-08-11 on the pinned CI engine (opengrep v1.22.0 CLI on Linux, the exact
+# build reusable-quality.yml installs), controlled detector, one variable at a
+# time:
+#
+#   src/inline.go    db.Query(fmt.Sprintf(...))        -> FIRES
+#   tests/inline.go  byte-identical to the line above  -> SILENT
+#
+# and `paths.skipped` reported `none` while it happened, so nothing in the gate
+# output revealed it. This repo is the worst case in the fleet: it follows Go's
+# own `foo_test.go` convention, so ALL 49 of its test files were dropped no
+# matter where they sit. Gate 4 scanned 60 files; with this file it scans 109.
+# Layout does not help — `dynamictablefilter/engine_filter_test.go` was skipped
+# exactly like the root-level ones.
+#
+# For contrast, the template does NOT drop Python/TS test filenames
+# (`test_app.py`, `app.test.ts`, `app.spec.ts`, `__tests__/`) — only `*_test.go`
+# plus the `test/` and `tests/` directories. Go repos are uniquely exposed.
+#
+# ── EDITING RULES ───────────────────────────────────────────────────────────
+#
+# 1. NEVER add `*_test.go`, `test/`, `tests/` or `spec/`. First-party test code
+#    is first-party code, and re-excluding it restores the exact hole this file
+#    closes.
+# 2. `ent/` is deliberately NOT excluded. It is generated code, but scanning it
+#    was measured to produce ZERO findings, so there is nothing to buy by
+#    hiding it. (The narrower `paths: exclude` on `go-weak-rand-for-security` in
+#    .quality/opengrep/go-security.yml stays as-is: that is one rule's scope,
+#    not a repo-wide blind spot.)
+# 3. Every directory entry ships BOTH the root-anchored and the nested form: a
+#    bare `**/x/` does NOT match a root-level `x/`, and it fails open with no
+#    warning.
+# 4. An exclusion is a statement about SCOPE ("this is not our source"), never
+#    about severity. Do not use this file to make a finding go away.
+
+.git/
+
+# Vendored third-party source, should any be added. Secrets in such trees stay
+# covered by gitleaks (gate 5), which scans independently of this file.
+vendor/
+**/vendor/
+node_modules/
+**/node_modules/
+
+# Build output, generated from source gate 4 already scans.
+dist/
+**/dist/
+build/
+**/build/
+out/
+**/out/

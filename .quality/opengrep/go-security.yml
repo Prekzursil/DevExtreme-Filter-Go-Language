@@ -15,6 +15,62 @@ rules:
           - pattern: $DB.Exec(fmt.Sprintf(...), ...)
           - pattern: $DB.ExecContext($CTX, fmt.Sprintf(...), ...)
 
+  # ── DATAFLOW companion to go-sql-string-concat. That rule (and every other
+  # rule in this file) matches SYNTAX: it requires the INLINE form
+  # `db.Query(fmt.Sprintf(...))`. Measured 2026-08-11 on the pinned CI engine
+  # (opengrep v1.22.0 CLI on Linux) with this exact ruleset:
+  #
+  #   src/inline.go   db.Query(fmt.Sprintf(...))                    FIRES
+  #   src/viavar.go   q := fmt.Sprintf(...); db.Query(q)            SILENT
+  #
+  # The second file WAS scanned (`paths.scanned` contains it), so this is a
+  # rule-precision gap, not a targeting artifact -- and the two-statement form
+  # is arguably the MORE idiomatic Go. That makes a clean zero from a
+  # syntax-only set much weaker evidence than it looks, which is the reason this
+  # rule exists.
+  #
+  # Both-states corpus for THIS rule, all on opengrep v1.22.0:
+  #   BAD   q := fmt.Sprintf(...) -> db.Query(q)            FIRES
+  #   BAD   base := fmt.Sprintf(...); q := base -> Query(q) FIRES  (two hops)
+  #   BAD   same shape inside a *_test.go file              FIRES  (needs the
+  #                                                         .semgrepignore too)
+  #   GOOD  db.Query("... $1", name)   (parameterized)      silent
+  #   GOOD  fmt.Sprintf(...) -> Fprintln (no SQL sink)      silent
+  #   GOOD  q := fmt.Sprintf("SELECT count(*) FROM users")  silent (constant-
+  #                                                         only format string)
+  - id: go-sql-format-taint
+    languages: [go]
+    severity: WARNING
+    mode: taint
+    message: >-
+      Possible SQL injection: a formatted/concatenated string flows into a SQL
+      query API. This rule follows DATAFLOW, so unlike go-sql-string-concat it
+      also catches the two-statement form (`q := fmt.Sprintf(...)` then
+      `db.Query(q)`). Use parameterized queries or a query builder (e.g. ent
+      predicates) instead.
+    pattern-sources:
+      - patterns:
+          - pattern-either:
+              - pattern: fmt.Sprintf(...)
+              - pattern: fmt.Sprint(...)
+              - pattern: fmt.Sprintln(...)
+          # A format call with only a constant format string and no arguments is
+          # still a constant, not attacker-influenced data.
+          - pattern-not: fmt.Sprintf("...")
+          - pattern-not: fmt.Sprint("...")
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.Query($Q, ...)
+              - pattern: $DB.QueryContext($CTX, $Q, ...)
+              - pattern: $DB.QueryRow($Q, ...)
+              - pattern: $DB.QueryRowContext($CTX, $Q, ...)
+              - pattern: $DB.Exec($Q, ...)
+              - pattern: $DB.ExecContext($CTX, $Q, ...)
+              - pattern: $DB.Prepare($Q, ...)
+              - pattern: $DB.PrepareContext($CTX, $Q, ...)
+          - focus-metavariable: $Q
+
   - id: go-exec-command-with-variable
     languages: [go]
     severity: WARNING
