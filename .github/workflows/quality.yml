@@ -1,34 +1,29 @@
-# Lean 6-gate quality (thin caller).
-#
-# Delegates to the shared reusable lean-gate workflow in
-# Prekzursil/quality-zero-platform. The template auto-detects the languages in
-# this repo (Go here) and runs only the lanes whose config/toolchain is present:
-#   1. lint+format+imports+sec-lint (pre-commit: golangci-lint v2 + gitleaks)
-#   2. types        (n/a for Go)
-#   3. tests+cov    (100% line+branch — Go suite via pre-commit go-test-cover hook)
-#   4. SAST         (opengrep, .quality/opengrep ruleset)
-#   5. secrets      (gitleaks, .gitleaks.toml)
-#   6. deps         (osv-scanner, osv-scanner.toml + Dependabot)
-#
-# Pinned to the template branch so this PR's CI is real now; the migration
-# runbook re-pins this to a release tag after the template merges to main.
+# QZP lean gate — zero tolerance (any finding of any severity fails).
+# Thin caller of quality-zero-platform's reusable workflow, pinned to an exact
+# commit. Gate changes happen in quality-zero-platform, never here; this repo
+# adopts them by bumping the pin below. See CONTRIBUTING.md.
 name: quality
 
 on:
   push:
-    branches: [main, master]
+    branches: ["main"]
   pull_request:
-    branches: [main, master]
+    branches: ["main"]
+  # a merge queue's synthetic commit must report the required check too
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
 
 concurrency:
   group: quality-${{ github.ref }}
-  cancel-in-progress: true
+  # superseded pull-request runs are cancelled; runs on the default branch
+  # always finish, so a cancelled run never leaves an untested commit red
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
-    permissions:
-      contents: read
-    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-quality.yml@v1
+    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-quality.yml@4a218e5808e881d1858ced670aadd63c12ea3497
+    with:
+      deps-severity-floor: any
