@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	entgo.io/ent v0.14.6
-	github.com/mattn/go-sqlite3 v1.14.50
+	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/rs/cors v1.11.1
 )
 
