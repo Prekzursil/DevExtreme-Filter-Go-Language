@@ -1,3 +1,17 @@
+# CodeQL — ADVANCED configuration (fleet CODEQL DECISION).
+# Runs BOTH suites — security-extended AND security-and-quality — which
+# strictly subsumes the default suite and the extended suite. Matrix over
+# every language this repository actually has (actions, go, python), one
+# upload per language with a per-language category. The repo's own
+# test/coverage suite (verify.yml, incl. scripts/coverage-gate.sh's
+# strict 100% Go coverage gate run by the lean gate) stays wired beside
+# this workflow.
+#
+# NOTE: per-language build-mode in the matrix is what makes the
+# actions+go combination possible at all (actions requires build-mode
+# none, go requires autobuild) — the single-global-build-mode limitation
+# that forced the QZP profile to drop the actions language does not
+# apply to this workflow.
 name: CodeQL
 
 permissions:
@@ -7,9 +21,9 @@ permissions:
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
   merge_group:
     types: [checks_requested]
   schedule:
@@ -17,15 +31,46 @@ on:
   workflow_dispatch:
 
 jobs:
-  codeql:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       actions: read
       contents: read
       security-events: write
-    uses: Prekzursil/quality-zero-platform/.github/workflows/reusable-codeql.yml@627c86837ef84bfb1bce4b20a844fab7a2c0d3aa
-    with:
-      repo_slug: ${{ github.repository }}
-      event_name: ${{ github.event_name }}
-      sha: ${{ github.event.pull_request.head.sha || github.sha }}
-      platform_repository: Prekzursil/quality-zero-platform
-      platform_ref: main
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: autobuild
+          - language: python
+            build-mode: none
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: [security-extended, security-and-quality]
+
+      - name: Autobuild
+        if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
