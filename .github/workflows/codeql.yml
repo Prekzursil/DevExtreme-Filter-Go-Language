@@ -56,7 +56,7 @@ jobs:
       # merge-commit checkout attributes uploads to the transient
       # refs/pull/N/merge, which is rebuilt on every merge attempt.
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
