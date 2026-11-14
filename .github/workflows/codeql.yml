@@ -50,8 +50,15 @@ jobs:
           - language: python
             build-mode: none
     steps:
+      # Checkout the PR head commit (what the quality-zero-platform reusable
+      # does): with the worktree on the head sha, analyze@v4 attributes the
+      # SARIF upload to refs/pull/N/head at that commit. The default
+      # merge-commit checkout attributes uploads to the transient
+      # refs/pull/N/merge, which is rebuilt on every merge attempt.
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Go
         if: matrix.language == 'go'
